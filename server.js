@@ -17,6 +17,9 @@ const io = require('socket.io')(http, {
 
 // In-memory store for shapes
 const shapes = {};
+// Historique des actions (max 2)
+const actionHistory = [];
+const MAX_HISTORY = 2;
 
 // Servir les fichiers statiques
 app.use(express.static(path.join(__dirname, 'public')));
@@ -24,6 +27,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Route pour l'admin
 app.get('/chantilly', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// Route pour l'atelier artiste
+app.get('/atelier', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'atelier.html'));
 });
 
 // Route principale
@@ -52,28 +60,96 @@ io.on('connection', socket => {
     socket.broadcast.emit('texture', data);
   });
 
+  // Création de formes prédéfinies
+  socket.on('shapeCreate', data => {
+    shapes[data.id] = data;
+    socket.broadcast.emit('shapeCreate', data);
+  });
+
   // Final draw event, update store and broadcast
   socket.on('draw', data => {
+    // Ajouter à l'historique
+    addToHistory({
+      type: 'draw',
+      action: 'add',
+      data: data
+    });
+    
     shapes[data.id] = data;
     socket.broadcast.emit('draw', data);
   });
 
   // Shape deletion, update store and broadcast
   socket.on('deleteShape', ({ id }) => {
+    // Sauvegarder la forme avant suppression pour undo
+    const deletedShape = shapes[id];
+    if (deletedShape) {
+      addToHistory({
+        type: 'delete',
+        action: 'remove',
+        data: deletedShape
+      });
+    }
+    
     delete shapes[id];
     io.emit('deleteShape', { id });
   });
 
   // Clear canvas, clear store and broadcast
   socket.on('clearCanvas', () => {
+    // Sauvegarder toutes les formes pour undo
+    const allShapes = { ...shapes };
+    addToHistory({
+      type: 'clear',
+      action: 'removeAll',
+      data: allShapes
+    });
+    
     for (let id in shapes) delete shapes[id];
     io.emit('clearCanvas');
+  });
+
+  // Undo action
+  socket.on('undo', () => {
+    if (actionHistory.length > 0) {
+      const lastAction = actionHistory.pop();
+      
+      switch (lastAction.type) {
+        case 'draw':
+          // Supprimer la dernière forme dessinée
+          delete shapes[lastAction.data.id];
+          io.emit('deleteShape', { id: lastAction.data.id });
+          break;
+          
+        case 'delete':
+          // Restaurer la forme supprimée
+          shapes[lastAction.data.id] = lastAction.data;
+          io.emit('draw', lastAction.data);
+          break;
+          
+        case 'clear':
+          // Restaurer toutes les formes
+          Object.assign(shapes, lastAction.data);
+          io.emit('restoreShapes', Object.values(lastAction.data));
+          break;
+      }
+    }
   });
 
   socket.on('disconnect', () => {
     console.log('user disconnected');
   });
 });
+
+// Fonction pour ajouter à l'historique
+function addToHistory(action) {
+  actionHistory.push(action);
+  
+  // Garder seulement les 2 dernières actions
+  if (actionHistory.length > MAX_HISTORY) {
+    actionHistory.shift(); // Supprimer la plus ancienne
+  }
+}
 
 // Le port DOIT être celui fourni par Railway
 const PORT = process.env.PORT || 3000;
