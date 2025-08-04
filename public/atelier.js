@@ -192,9 +192,13 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     if (btn.closest('.tool-group')) {
       document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentTool = btn.id;
       updateCursor();
+      
+      // Debug pour vérifier
+      console.log('Outil sélectionné:', currentTool);
     }
   });
 });
