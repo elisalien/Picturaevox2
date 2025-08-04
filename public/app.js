@@ -78,6 +78,14 @@ document.getElementById('size-slider').addEventListener('input', e => {
   currentSize = parseInt(e.target.value, 10);
 });
 
+// Raccourci Ctrl+Z pour undo
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'z') {
+    e.preventDefault();
+    socket.emit('undo');
+  }
+});
+
 // Initialize existing shapes on load
 socket.on('initShapes', shapes => {
   shapes.forEach(data => {
@@ -304,4 +312,48 @@ socket.on('deleteShape', ({ id }) => {
 socket.on('clearCanvas', () => {
   layer.destroyChildren();
   layer.draw();
+});
+
+// Écouter la restauration de formes (pour undo clear)
+socket.on('restoreShapes', (shapes) => {
+  layer.destroyChildren();
+  shapes.forEach(data => {
+    const line = new Konva.Line({
+      id: data.id,
+      points: data.points,
+      stroke: data.stroke,
+      strokeWidth: data.strokeWidth,
+      globalCompositeOperation: data.globalCompositeOperation,
+      lineCap: 'round',
+      lineJoin: 'round'
+    });
+    layer.add(line);
+  });
+  layer.draw();
+});
+
+// Écouter les formes créées par l'interface artiste
+socket.on('shapeCreate', data => {
+  // Recréer la forme selon son type
+  let shape;
+  const config = data.config;
+  
+  switch(data.type) {
+    case 'shape-circle':
+      shape = new Konva.Circle(config);
+      break;
+    case 'shape-rectangle':
+      shape = new Konva.Rect(config);
+      break;
+    case 'shape-line':
+    case 'shape-arrow':
+      shape = new Konva.Line(config);
+      break;
+  }
+  
+  if (shape) {
+    shape.id(data.id);
+    layer.add(shape);
+    layer.draw();
+  }
 });
