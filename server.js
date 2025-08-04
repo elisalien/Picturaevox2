@@ -113,6 +113,36 @@ io.on('connection', socket => {
     }
   });
 
+  // === NOUVEAUX ÉVÉNEMENTS BRUSH ANIMÉS ===
+  
+  // Gestion des brush effects avec throttling serveur agressif
+  socket.on('brushEffect', data => {
+    const now = Date.now();
+    // Throttling serveur adaptatif selon l'interface
+    const throttleTime = data.interface === 'admin' ? 100 : 
+                        data.interface === 'atelier' ? 150 : 250;
+    
+    if (!socket.lastBrushEffect || (now - socket.lastBrushEffect) >= throttleTime) {
+      // Broadcaster à tous les autres clients avec métadonnées serveur
+      socket.broadcast.emit('brushEffect', {
+        ...data,
+        socketId: socket.id,
+        serverTimestamp: now
+      });
+      socket.lastBrushEffect = now;
+    }
+  });
+
+  // Nettoyage des effets d'un utilisateur spécifique (optimisation)
+  socket.on('cleanupUserEffects', ({ userId }) => {
+    socket.broadcast.emit('cleanupUserEffects', { 
+      socketId: socket.id, 
+      userId 
+    });
+  });
+
+  // === FIN NOUVEAUX ÉVÉNEMENTS ===
+
   // Création de formes prédéfinies
   socket.on('shapeCreate', data => {
     const shapeWithTimestamp = addTimestampToShape(data);
@@ -200,6 +230,8 @@ io.on('connection', socket => {
 
   socket.on('disconnect', () => {
     console.log('user disconnected');
+    // Nettoyer les brush effects de cet utilisateur
+    socket.broadcast.emit('cleanupUserEffects', { socketId: socket.id });
   });
 });
 

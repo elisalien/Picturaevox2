@@ -20,6 +20,436 @@ let isCreatingShape = false;
 let shapePreview = null;
 let shapeStartPos = null;
 
+// === SYSTÈME BRUSH ANIMÉS OPTIMISÉ POUR INTERFACE ATELIER ===
+
+// Configuration optimisée pour l'interface atelier (qualité élevée)
+const AtelierBrushConfig = {
+  sparkles: { particles: 5, duration: 1500 },
+  watercolor: { drops: 4, duration: 2000 },
+  electric: { bolts: 3, segments: 6, duration: 1500 },
+  petals: { count: 4, duration: 3000 },
+  neon: { particles: 6, duration: 2000 },
+  fire: { flames: 5, duration: 1500 }
+};
+
+// Gestionnaire d'effets pour interface atelier (version création)
+class AtelierBrushManager {
+  constructor() {
+    this.activeEffects = new Map();
+    this.lastEmit = 0;
+    this.effectCount = 0;
+    this.maxEffects = 50; // Limite modérée pour atelier
+    
+    // Nettoyage automatique toutes les 25 secondes
+    setInterval(() => this.cleanup(), 25000);
+  }
+
+  // Créer effet local avec émission réseau
+  createAndEmitEffect(type, x, y, color, size) {
+    // Throttling modéré pour interface atelier (200ms)
+    const now = Date.now();
+    if (now - this.lastEmit < 200) return;
+    
+    // Créer l'effet local
+    this.createLocalEffect(type, x, y, color, size);
+    
+    // Émettre vers le réseau
+    socket.emit('brushEffect', {
+      type,
+      x,
+      y,
+      color,
+      size,
+      interface: 'atelier',
+      timestamp: now
+    });
+    
+    this.lastEmit = now;
+  }
+
+  // Créer effet reçu du réseau
+  createNetworkEffect(data) {
+    this.createLocalEffect(data.type, data.x, data.y, data.color, data.size);
+  }
+
+  // Créer effet local (qualité élevée pour création)
+  createLocalEffect(type, x, y, color, size) {
+    if (this.effectCount >= this.maxEffects) return;
+    
+    const effectId = 'atelier_effect_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    
+    switch(type) {
+      case 'sparkles':
+        this.createSparkles(x, y, color, size, effectId);
+        break;
+      case 'watercolor':
+        this.createWatercolor(x, y, color, size, effectId);
+        break;
+      case 'electric':
+        this.createElectric(x, y, color, size, effectId);
+        break;
+      case 'petals':
+        this.createPetals(x, y, color, size, effectId);
+        break;
+      case 'neon':
+        this.createNeon(x, y, color, size, effectId);
+        break;
+      case 'fire':
+        this.createFire(x, y, color, size, effectId);
+        break;
+    }
+  }
+
+  // Effets qualité élevée pour création
+  createSparkles(x, y, color, size, effectId) {
+    const config = AtelierBrushConfig.sparkles;
+    const elements = [];
+    
+    for (let i = 0; i < config.particles; i++) {
+      const offsetX = (Math.random() - 0.5) * size * 1.2;
+      const offsetY = (Math.random() - 0.5) * size * 1.2;
+      const sparkleSize = 1 + Math.random() * 2.5;
+      
+      const sparkle = new Konva.Star({
+        x: x + offsetX,
+        y: y + offsetY,
+        numPoints: 4,
+        innerRadius: sparkleSize * 0.5,
+        outerRadius: sparkleSize,
+        fill: color,
+        rotation: Math.random() * 360,
+        opacity: 0.8,
+        effectId: effectId
+      });
+      
+      layer.add(sparkle);
+      elements.push(sparkle);
+      
+      // Animation avec scintillement
+      const animation = new Konva.Animation((frame) => {
+        const progress = frame.time / config.duration;
+        const scale = 0.6 + Math.sin(frame.time * 0.007 + i) * 0.35;
+        const rotation = sparkle.rotation() + 1.5;
+        const opacity = Math.max(0, 0.8 - progress * 0.6);
+        
+        sparkle.scaleX(scale);
+        sparkle.scaleY(scale);
+        sparkle.rotation(rotation);
+        sparkle.opacity(opacity);
+        
+        if (progress >= 1 || opacity <= 0) {
+          sparkle.destroy();
+          animation.stop();
+        }
+      }, layer);
+      
+      animation.start();
+    }
+    
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  createWatercolor(x, y, color, size, effectId) {
+    const config = AtelierBrushConfig.watercolor;
+    const elements = [];
+    
+    for (let i = 0; i < config.drops; i++) {
+      const offsetX = (Math.random() - 0.5) * size * 1.2;
+      const offsetY = (Math.random() - 0.5) * size * 1.2;
+      const dropSize = size * (0.4 + Math.random() * 0.4);
+      
+      const drop = new Konva.Circle({
+        x: x + offsetX,
+        y: y + offsetY,
+        radius: dropSize,
+        fill: color,
+        opacity: 0.2 + Math.random() * 0.2,
+        scaleX: 0.8 + Math.random() * 0.3,
+        scaleY: 0.8 + Math.random() * 0.3,
+        effectId: effectId
+      });
+      
+      layer.add(drop);
+      elements.push(drop);
+      
+      // Animation de diffusion
+      const animation = new Konva.Animation((frame) => {
+        const progress = frame.time / config.duration;
+        const expansion = 1 + progress * 1.2;
+        const opacity = Math.max(0, drop.opacity() - progress * 0.1);
+        const wave = Math.sin(frame.time * 0.004 + i) * 0.08;
+        
+        drop.scaleX(expansion + wave);
+        drop.scaleY(expansion + wave * 0.7);
+        drop.opacity(opacity);
+        
+        if (progress >= 1 || opacity <= 0) {
+          drop.destroy();
+          animation.stop();
+        }
+      }, layer);
+      
+      animation.start();
+    }
+    
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  createElectric(x, y, color, size, effectId) {
+    const config = AtelierBrushConfig.electric;
+    const elements = [];
+    
+    for (let i = 0; i < config.bolts; i++) {
+      const points = [x, y];
+      let currentX = x;
+      let currentY = y;
+      
+      // Créer un zigzag
+      for (let j = 0; j < config.segments; j++) {
+        currentX += (Math.random() - 0.5) * size * 0.7;
+        currentY += (Math.random() - 0.5) * size * 0.7;
+        points.push(currentX, currentY);
+      }
+      
+      const bolt = new Konva.Line({
+        points: points,
+        stroke: color,
+        strokeWidth: 1 + Math.random() * 1.5,
+        opacity: 0.7,
+        lineCap: 'round',
+        shadowColor: color,
+        shadowBlur: 4,
+        shadowOpacity: 0.4,
+        effectId: effectId
+      });
+      
+      layer.add(bolt);
+      elements.push(bolt);
+      
+      // Animation de scintillement
+      const animation = new Konva.Animation((frame) => {
+        const progress = frame.time / config.duration;
+        const flicker = 0.3 + Math.sin(frame.time * 0.04 + i * 1.5) * 0.5;
+        const glow = 3 + Math.sin(frame.time * 0.025 + i) * 2;
+        const opacity = Math.max(0, 0.7 - progress * 0.5);
+        
+        bolt.opacity(flicker * opacity);
+        bolt.shadowBlur(glow);
+        
+        if (progress >= 1 || opacity <= 0) {
+          bolt.destroy();
+          animation.stop();
+        }
+      }, layer);
+      
+      animation.start();
+    }
+    
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  createPetals(x, y, color, size, effectId) {
+    const config = AtelierBrushConfig.petals;
+    const elements = [];
+    
+    for (let i = 0; i < config.count; i++) {
+      const offsetX = (Math.random() - 0.5) * size * 0.7;
+      const offsetY = (Math.random() - 0.5) * size * 0.7;
+      const petalSize = size * (0.25 + Math.random() * 0.35);
+      
+      const petal = new Konva.Ellipse({
+        x: x + offsetX,
+        y: y + offsetY,
+        radiusX: petalSize,
+        radiusY: petalSize * 0.6,
+        fill: color,
+        opacity: 0.6 + Math.random() * 0.2,
+        rotation: Math.random() * 360,
+        scaleX: 0.8 + Math.random() * 0.3,
+        scaleY: 0.8 + Math.random() * 0.3,
+        effectId: effectId
+      });
+      
+      layer.add(petal);
+      elements.push(petal);
+      
+      // Animation de chute avec rotation
+      const animation = new Konva.Animation((frame) => {
+        const progress = frame.time / config.duration;
+        const rotation = petal.rotation() + 1.2;
+        const fall = petal.y() + 0.6;
+        const sway = Math.sin(frame.time * 0.01 + i) * 1.2;
+        const opacity = Math.max(0, petal.opacity() - progress * 0.18);
+        const flutter = 0.9 + Math.sin(frame.time * 0.01 + i) * 0.15;
+        
+        petal.rotation(rotation);
+        petal.y(fall);
+        petal.x(petal.x() + sway * 0.03);
+        petal.opacity(opacity);
+        petal.scaleX(flutter);
+        petal.scaleY(flutter * 0.8);
+        
+        if (progress >= 1 || opacity <= 0) {
+          petal.destroy();
+          animation.stop();
+        }
+      }, layer);
+      
+      animation.start();
+    }
+    
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  createNeon(x, y, color, size, effectId) {
+    const config = AtelierBrushConfig.neon;
+    const elements = [];
+    
+    for (let i = 0; i < config.particles; i++) {
+      const offsetX = (Math.random() - 0.5) * size * 0.8;
+      const offsetY = (Math.random() - 0.5) * size * 0.8;
+      const particleSize = 1.5 + Math.random() * 2;
+      
+      const particle = new Konva.Circle({
+        x: x + offsetX,
+        y: y + offsetY,
+        radius: particleSize,
+        fill: color,
+        opacity: 0.7,
+        shadowColor: color,
+        shadowBlur: 8,
+        shadowOpacity: 0.5,
+        effectId: effectId
+      });
+      
+      layer.add(particle);
+      elements.push(particle);
+      
+      // Animation glow
+      const animation = new Konva.Animation((frame) => {
+        const progress = frame.time / config.duration;
+        const glow = 6 + Math.sin(frame.time * 0.008 + i) * 4;
+        const opacity = Math.max(0, 0.7 - progress * 0.5);
+        const scale = 1 + Math.sin(frame.time * 0.005 + i) * 0.25;
+        
+        particle.shadowBlur(glow);
+        particle.opacity(opacity);
+        particle.scaleX(scale);
+        particle.scaleY(scale);
+        
+        if (progress >= 1 || opacity <= 0) {
+          particle.destroy();
+          animation.stop();
+        }
+      }, layer);
+      
+      animation.start();
+    }
+    
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  createFire(x, y, color, size, effectId) {
+    const config = AtelierBrushConfig.fire;
+    const elements = [];
+    
+    for (let i = 0; i < config.flames; i++) {
+      const offsetX = (Math.random() - 0.5) * size * 0.5;
+      const offsetY = (Math.random() - 0.5) * size * 0.5;
+      
+      const flame = new Konva.Ellipse({
+        x: x + offsetX,
+        y: y + offsetY,
+        radiusX: 2.5 + Math.random() * 1.5,
+        radiusY: 5 + Math.random() * 3,
+        fill: color,
+        opacity: 0.6,
+        shadowColor: '#FF4500',
+        shadowBlur: 6,
+        shadowOpacity: 0.3,
+        effectId: effectId
+      });
+      
+      layer.add(flame);
+      elements.push(flame);
+      
+      // Animation flamme
+      const animation = new Konva.Animation((frame) => {
+        const progress = frame.time / config.duration;
+        const flicker = 0.7 + Math.sin(frame.time * 0.018 + i * 0.4) * 0.25;
+        const rise = flame.y() - 0.6;
+        const sway = Math.sin(frame.time * 0.012 + i) * 1.5;
+        const opacity = Math.max(0, 0.6 - progress * 0.4);
+        
+        flame.scaleX(flicker);
+        flame.scaleY(flicker);
+        flame.y(rise);
+        flame.x(flame.x() + sway * 0.08);
+        flame.opacity(opacity);
+        
+        if (progress >= 1 || opacity <= 0) {
+          flame.destroy();
+          animation.stop();
+        }
+      }, layer);
+      
+      animation.start();
+    }
+    
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  trackEffect(effectId, elements, duration) {
+    this.activeEffects.set(effectId, {
+      elements,
+      timestamp: Date.now(),
+      duration
+    });
+    this.effectCount++;
+    
+    // Auto-cleanup
+    setTimeout(() => {
+      this.removeEffect(effectId);
+    }, duration + 800);
+    
+    layer.batchDraw();
+  }
+
+  removeEffect(effectId) {
+    const effect = this.activeEffects.get(effectId);
+    if (effect) {
+      effect.elements.forEach(el => {
+        if (!el.isDestroyed()) el.destroy();
+      });
+      this.activeEffects.delete(effectId);
+      this.effectCount = Math.max(0, this.effectCount - 1);
+    }
+  }
+
+  cleanup() {
+    const now = Date.now();
+    const expired = [];
+    
+    this.activeEffects.forEach((effect, effectId) => {
+      if (now - effect.timestamp > effect.duration + 2500) {
+        expired.push(effectId);
+      }
+    });
+    
+    expired.forEach(id => this.removeEffect(id));
+    layer.batchDraw();
+    
+    if (expired.length > 0) {
+      console.log(`Atelier interface: cleaned ${expired.length} expired effects`);
+    }
+  }
+}
+
+// Initialiser le gestionnaire d'effets
+const brushManager = new AtelierBrushManager();
+
+// === FIN SYSTÈME BRUSH ANIMÉS ===
+
 // Throttle helper
 function throttle(func, wait) {
   let lastTime = 0;
@@ -58,200 +488,6 @@ const emitDrawingThrottled = throttle((data) => {
 const emitTextureThrottled = throttle((data) => {
   socket.emit('texture', data);
 }, 150);
-
-// Throttling pour paillettes (effet local uniquement, pas de réseau)
-const createSparklesThrottled = throttle((x, y, color, size) => {
-  createSparklesEffect(x, y, color, size);
-}, 100);
-
-// Throttling pour les nouveaux brushs (effets locaux uniquement)
-const createWatercolorThrottled = throttle((x, y, color, size) => {
-  createWatercolorEffect(x, y, color, size);
-}, 120);
-
-const createElectricThrottled = throttle((x, y, color, size) => {
-  createElectricEffect(x, y, color, size);
-}, 100);
-
-const createPetalsThrottled = throttle((x, y, color, size) => {
-  createPetalsEffect(x, y, color, size);
-}, 200);
-
-// Fonction pour créer l'effet aquarelle
-function createWatercolorEffect(x, y, color, size) {
-  const drops = 3 + Math.floor(Math.random() * 4); // 3-6 gouttes
-  
-  for (let i = 0; i < drops; i++) {
-    const offsetX = (Math.random() - 0.5) * size * 1.5;
-    const offsetY = (Math.random() - 0.5) * size * 1.5;
-    const dropSize = size * (0.5 + Math.random() * 0.8);
-    
-    const drop = new Konva.Circle({
-      x: x + offsetX,
-      y: y + offsetY,
-      radius: dropSize,
-      fill: color,
-      opacity: 0.15 + Math.random() * 0.25, // Très transparent
-      scaleX: 0.8 + Math.random() * 0.4,
-      scaleY: 0.8 + Math.random() * 0.4
-    });
-    
-    layer.add(drop);
-    
-    // Animation de diffusion
-    const diffusion = new Konva.Animation((frame) => {
-      const progress = frame.time / 2000; // 2 secondes
-      const scale = 1 + progress * 0.5;
-      const opacity = Math.max(0, drop.opacity() - progress * 0.1);
-      
-      drop.scaleX(scale);
-      drop.scaleY(scale);
-      drop.opacity(opacity);
-      
-      if (progress >= 1 || opacity <= 0) {
-        drop.destroy();
-        diffusion.stop();
-      }
-    }, layer);
-    
-    diffusion.start();
-  }
-  layer.batchDraw();
-}
-
-// Fonction pour créer l'effet électrique
-function createElectricEffect(x, y, color, size) {
-  const bolts = 2 + Math.floor(Math.random() * 3); // 2-4 éclairs
-  
-  for (let i = 0; i < bolts; i++) {
-    const points = [x, y];
-    const segments = 5 + Math.floor(Math.random() * 5); // 5-9 segments
-    
-    let currentX = x;
-    let currentY = y;
-    
-    // Créer un zigzag aléatoire
-    for (let j = 0; j < segments; j++) {
-      currentX += (Math.random() - 0.5) * size * 0.8;
-      currentY += (Math.random() - 0.5) * size * 0.8;
-      points.push(currentX, currentY);
-    }
-    
-    const bolt = new Konva.Line({
-      points: points,
-      stroke: color,
-      strokeWidth: 1 + Math.random() * 2,
-      opacity: 0.7 + Math.random() * 0.3,
-      lineCap: 'round',
-      tension: 0.1
-    });
-    
-    layer.add(bolt);
-    
-    // Animation de scintillement
-    const flicker = new Konva.Animation((frame) => {
-      const opacity = 0.3 + Math.sin(frame.time * 0.02) * 0.4;
-      bolt.opacity(opacity);
-      
-      if (frame.time > 1500) { // 1.5 secondes
-        bolt.destroy();
-        flicker.stop();
-      }
-    }, layer);
-    
-    flicker.start();
-  }
-  layer.batchDraw();
-}
-
-// Fonction pour créer l'effet pétales
-function createPetalsEffect(x, y, color, size) {
-  const petals = 4 + Math.floor(Math.random() * 4); // 4-7 pétales
-  
-  for (let i = 0; i < petals; i++) {
-    const offsetX = (Math.random() - 0.5) * size;
-    const offsetY = (Math.random() - 0.5) * size;
-    const petalSize = size * (0.3 + Math.random() * 0.4);
-    
-    const petal = new Konva.Ellipse({
-      x: x + offsetX,
-      y: y + offsetY,
-      radiusX: petalSize,
-      radiusY: petalSize * 0.6,
-      fill: color,
-      opacity: 0.6 + Math.random() * 0.3,
-      rotation: Math.random() * 360,
-      scaleX: 0.8 + Math.random() * 0.4,
-      scaleY: 0.8 + Math.random() * 0.4
-    });
-    
-    layer.add(petal);
-    
-    // Animation de rotation et chute
-    const fall = new Konva.Animation((frame) => {
-      const progress = frame.time / 3000; // 3 secondes
-      const rotation = petal.rotation() + 2;
-      const y = petal.y() + 0.5;
-      const opacity = Math.max(0, petal.opacity() - progress * 0.2);
-      
-      petal.rotation(rotation);
-      petal.y(y);
-      petal.opacity(opacity);
-      
-      if (progress >= 1 || opacity <= 0) {
-        petal.destroy();
-        fall.stop();
-      }
-    }, layer);
-    
-    fall.start();
-  }
-  layer.batchDraw();
-}
-function createSparklesEffect(x, y, color, size) {
-  const sparkleCount = 8 + Math.floor(Math.random() * 5); // 8-12 paillettes
-  
-  for (let i = 0; i < sparkleCount; i++) {
-    const offsetX = (Math.random() - 0.5) * size * 2;
-    const offsetY = (Math.random() - 0.5) * size * 2;
-    const sparkleSize = 1 + Math.random() * 3;
-    
-    // Créer une paillette
-    const sparkle = new Konva.Star({
-      x: x + offsetX,
-      y: y + offsetY,
-      numPoints: 4,
-      innerRadius: sparkleSize * 0.5,
-      outerRadius: sparkleSize,
-      fill: color,
-      rotation: Math.random() * 360,
-      opacity: 0.8 + Math.random() * 0.2,
-      scaleX: 0.5 + Math.random() * 0.5,
-      scaleY: 0.5 + Math.random() * 0.5
-    });
-    
-    layer.add(sparkle);
-    
-    // Animation scintillante
-    const scaleAnimation = new Konva.Animation((frame) => {
-      const scale = 0.5 + Math.sin(frame.time * 0.01 + i) * 0.3;
-      sparkle.scaleX(scale);
-      sparkle.scaleY(scale);
-      
-      const opacity = 0.3 + Math.sin(frame.time * 0.008 + i * 0.5) * 0.5;
-      sparkle.opacity(opacity);
-      
-      // Faire disparaître après 3 secondes
-      if (frame.time > 3000) {
-        sparkle.destroy();
-        scaleAnimation.stop();
-      }
-    }, layer);
-    
-    scaleAnimation.start();
-  }
-  layer.batchDraw();
-}
 
 // Fonction pour créer l'effet texture
 function createTextureEffect(x, y, color, size) {
@@ -315,9 +551,10 @@ function createStar(startPos, endPos) {
     fill: 'transparent'
   });
 }
+
 function createCalligraphyStroke(points, pressure) {
   const strokeWidth = getPressureSize(pressure);
-  const angle = Math.random() * Math.PI / 6; // Variation d'angle
+  const angle = Math.random() * Math.PI / 6;
   
   return new Konva.Line({
     points: points,
@@ -339,9 +576,6 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
       btn.classList.add('active');
       currentTool = btn.id;
       updateCursor();
-      
-      // Debug pour vérifier
-      console.log('Outil sélectionné:', currentTool);
     }
   });
 });
@@ -384,7 +618,6 @@ document.querySelectorAll('.color-btn').forEach(btn => {
 const colorPicker = document.getElementById('color-picker');
 colorPicker.addEventListener('input', (e) => {
   currentColor = e.target.value;
-  // Retirer l'active des couleurs prédéfinies
   document.querySelectorAll('.color-btn').forEach(c => c.classList.remove('active'));
 });
 
@@ -462,17 +695,14 @@ function updateZoomDisplay() {
 
 // Pipette couleur
 function pickColor(x, y) {
-  // Créer un canvas temporaire pour récupérer la couleur
   const canvas = stage.toCanvas({ x: x, y: y, width: 1, height: 1 });
   const ctx = canvas.getContext('2d');
   const pixel = ctx.getImageData(0, 0, 1, 1).data;
   
-  if (pixel[3] > 0) { // Si ce n'est pas transparent
+  if (pixel[3] > 0) {
     const color = `#${((1 << 24) + (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]).toString(16).slice(1)}`;
     currentColor = color;
     colorPicker.value = color;
-    
-    // Retirer active des couleurs prédéfinies
     document.querySelectorAll('.color-btn').forEach(c => c.classList.remove('active'));
   }
 }
@@ -580,32 +810,11 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     return;
   }
 
-  if (currentTool === 'sparkles') {
+  // Nouveaux brush animés synchronisés
+  if (['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
     isDrawing = true;
     currentId = generateId();
-    // Les paillettes ne sont pas synchronisées (effet local uniquement)
-    createSparklesThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
-    return;
-  }
-
-  if (currentTool === 'watercolor') {
-    isDrawing = true;
-    currentId = generateId();
-    createWatercolorThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
-    return;
-  }
-
-  if (currentTool === 'electric') {
-    isDrawing = true;
-    currentId = generateId();
-    createElectricThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
-    return;
-  }
-
-  if (currentTool === 'petals') {
-    isDrawing = true;
-    currentId = generateId();
-    createPetalsThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
 
@@ -702,24 +911,9 @@ stage.on('mousemove touchmove pointermove', (evt) => {
     return;
   }
 
-  if (currentTool === 'sparkles') {
-    // Continuer l'effet paillettes (local uniquement)
-    createSparklesThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
-    return;
-  }
-
-  if (currentTool === 'watercolor') {
-    createWatercolorThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
-    return;
-  }
-
-  if (currentTool === 'electric') {
-    createElectricThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
-    return;
-  }
-
-  if (currentTool === 'petals') {
-    createPetalsThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+  // Nouveaux brush animés (continuer l'effet)
+  if (['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
+    brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
 
@@ -767,7 +961,7 @@ stage.on('mouseup touchend pointerup', () => {
   if (!isDrawing) return;
   isDrawing = false;
 
-  if (currentTool === 'texture') {
+  if (currentTool === 'texture' || ['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
     return;
   }
 
@@ -798,6 +992,22 @@ document.getElementById('export').addEventListener('click', () => {
 
 document.getElementById('back-home').addEventListener('click', () => {
   window.location.href = '/';
+});
+
+// === ÉCOUTEURS SOCKET POUR EFFETS RÉSEAU ===
+
+// Écouter les brush effects des autres utilisateurs
+socket.on('brushEffect', (data) => {
+  brushManager.createNetworkEffect(data);
+});
+
+// Nettoyage des effets d'un utilisateur déconnecté
+socket.on('cleanupUserEffects', (data) => {
+  brushManager.activeEffects.forEach((effect, effectId) => {
+    if (effect.socketId === data.socketId) {
+      brushManager.removeEffect(effectId);
+    }
+  });
 });
 
 // Socket listeners (identiques aux autres interfaces)
