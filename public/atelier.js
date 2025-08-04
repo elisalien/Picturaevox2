@@ -609,13 +609,6 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Actions
-document.getElementById('clear-canvas').addEventListener('click', () => {
-  layer.destroyChildren();
-  layer.draw();
-  socket.emit('clearCanvas');
-});
-
 document.getElementById('export').addEventListener('click', () => {
   const uri = stage.toDataURL({ pixelRatio: 3 });
   const link = document.createElement('a');
