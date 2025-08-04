@@ -51,7 +51,12 @@ function getPressureSize(pressure) {
 
 const emitDrawingThrottled = throttle((data) => {
   socket.emit('drawing', data);
-}, 50);
+}, 50); // Augmenté de 50ms pour réduire la charge réseau
+
+// Throttling pour texture (réseau réduit)
+const emitTextureThrottled = throttle((data) => {
+  socket.emit('texture', data);
+}, 150); // 150ms pour texture
 
 // Tool buttons
 document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -127,8 +132,8 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     isDrawing = true;
     currentId = generateId();
     
-    // Émettre l'événement texture
-    socket.emit('texture', {
+    // Utiliser throttling pour texture
+    emitTextureThrottled({
       x: scenePos.x,
       y: scenePos.y,
       color: currentColor,
@@ -181,7 +186,7 @@ stage.on('mousemove touchmove pointermove', (evt) => {
   
   if (currentTool === 'texture') {
     // Mode texture : continuer l'émission
-    socket.emit('texture', {
+    emitTextureThrottled({
       x: scenePos.x,
       y: scenePos.y,
       color: currentColor,

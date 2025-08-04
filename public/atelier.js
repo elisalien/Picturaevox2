@@ -54,6 +54,62 @@ const emitDrawingThrottled = throttle((data) => {
   socket.emit('drawing', data);
 }, 50);
 
+// Throttling réduit pour texture (économie réseau)
+const emitTextureThrottled = throttle((data) => {
+  socket.emit('texture', data);
+}, 150);
+
+// Throttling pour paillettes (effet local uniquement, pas de réseau)
+const createSparklesThrottled = throttle((x, y, color, size) => {
+  createSparklesEffect(x, y, color, size);
+}, 100);
+
+// Fonction pour créer l'effet paillettes animé
+function createSparklesEffect(x, y, color, size) {
+  const sparkleCount = 8 + Math.floor(Math.random() * 5); // 8-12 paillettes
+  
+  for (let i = 0; i < sparkleCount; i++) {
+    const offsetX = (Math.random() - 0.5) * size * 2;
+    const offsetY = (Math.random() - 0.5) * size * 2;
+    const sparkleSize = 1 + Math.random() * 3;
+    
+    // Créer une paillette
+    const sparkle = new Konva.Star({
+      x: x + offsetX,
+      y: y + offsetY,
+      numPoints: 4,
+      innerRadius: sparkleSize * 0.5,
+      outerRadius: sparkleSize,
+      fill: color,
+      rotation: Math.random() * 360,
+      opacity: 0.8 + Math.random() * 0.2,
+      scaleX: 0.5 + Math.random() * 0.5,
+      scaleY: 0.5 + Math.random() * 0.5
+    });
+    
+    layer.add(sparkle);
+    
+    // Animation scintillante
+    const scaleAnimation = new Konva.Animation((frame) => {
+      const scale = 0.5 + Math.sin(frame.time * 0.01 + i) * 0.3;
+      sparkle.scaleX(scale);
+      sparkle.scaleY(scale);
+      
+      const opacity = 0.3 + Math.sin(frame.time * 0.008 + i * 0.5) * 0.5;
+      sparkle.opacity(opacity);
+      
+      // Faire disparaître après 3 secondes
+      if (frame.time > 3000) {
+        sparkle.destroy();
+        scaleAnimation.stop();
+      }
+    }, layer);
+    
+    scaleAnimation.start();
+  }
+  layer.batchDraw();
+}
+
 // Fonction pour créer l'effet texture
 function createTextureEffect(x, y, color, size) {
   for (let i = 0; i < 5; i++) {
@@ -78,7 +134,44 @@ function createTextureEffect(x, y, color, size) {
   layer.batchDraw();
 }
 
-// Fonction pour créer effet calligraphie
+// Fonction pour créer triangle
+function createTriangle(startPos, endPos) {
+  const width = Math.abs(endPos.x - startPos.x);
+  const height = Math.abs(endPos.y - startPos.y);
+  
+  const centerX = (startPos.x + endPos.x) / 2;
+  const topY = Math.min(startPos.y, endPos.y);
+  const bottomY = Math.max(startPos.y, endPos.y);
+  
+  return new Konva.Line({
+    points: [
+      centerX, topY,
+      startPos.x, bottomY,
+      endPos.x, bottomY,
+      centerX, topY
+    ],
+    stroke: currentColor,
+    strokeWidth: currentSize,
+    fill: 'transparent',
+    closed: true
+  });
+}
+
+// Fonction pour créer étoile
+function createStar(startPos, endPos) {
+  const radius = Math.sqrt(Math.pow(endPos.x - startPos.x, 2) + Math.pow(endPos.y - startPos.y, 2));
+  
+  return new Konva.Star({
+    x: startPos.x,
+    y: startPos.y,
+    numPoints: 5,
+    innerRadius: radius * 0.4,
+    outerRadius: radius,
+    stroke: currentColor,
+    strokeWidth: currentSize,
+    fill: 'transparent'
+  });
+}
 function createCalligraphyStroke(points, pressure) {
   const strokeWidth = getPressureSize(pressure);
   const angle = Math.random() * Math.PI / 6; // Variation d'angle
@@ -330,13 +423,21 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   if (currentTool === 'texture') {
     isDrawing = true;
     currentId = generateId();
-    socket.emit('texture', {
+    emitTextureThrottled({
       x: scenePos.x,
       y: scenePos.y,
       color: currentColor,
       size: pressureSize
     });
     createTextureEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'sparkles') {
+    isDrawing = true;
+    currentId = generateId();
+    // Les paillettes ne sont pas synchronisées (effet local uniquement)
+    createSparklesThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
 
@@ -395,6 +496,12 @@ stage.on('mousemove touchmove pointermove', (evt) => {
       case 'shape-rectangle':
         shapePreview = createRectangle(shapeStartPos, scenePos);
         break;
+      case 'shape-triangle':
+        shapePreview = createTriangle(shapeStartPos, scenePos);
+        break;
+      case 'shape-star':
+        shapePreview = createStar(shapeStartPos, scenePos);
+        break;
       case 'shape-line':
         shapePreview = createLine(shapeStartPos, scenePos);
         break;
@@ -417,13 +524,19 @@ stage.on('mousemove touchmove pointermove', (evt) => {
   const pressureSize = getPressureSize(pressure);
 
   if (currentTool === 'texture') {
-    socket.emit('texture', {
+    emitTextureThrottled({
       x: scenePos.x,
       y: scenePos.y,
       color: currentColor,
       size: pressureSize
     });
     createTextureEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'sparkles') {
+    // Continuer l'effet paillettes (local uniquement)
+    createSparklesThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
 
