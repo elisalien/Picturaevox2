@@ -15,6 +15,7 @@ let isDrawing    = false;
 let lastLine;
 let currentId;
 let lastPanPos = null;
+let basePressure = 1; // Pression de base pour souris/doigt
 
 // Throttle helper
 function throttle(func, wait) {
@@ -30,6 +31,22 @@ function throttle(func, wait) {
 
 function generateId() {
   return 'shape_' + Date.now() + '_' + Math.round(Math.random() * 10000);
+}
+
+// Fonction pour obtenir la pression
+function getPressure(evt) {
+  // Vérifier si c'est un PointerEvent avec support pression
+  if (evt.originalEvent && evt.originalEvent.pressure !== undefined) {
+    return Math.max(0.1, evt.originalEvent.pressure); // Min 0.1 pour éviter traits invisibles
+  }
+  return basePressure; // Fallback pour souris/touch
+}
+
+// Fonction pour calculer l'épaisseur selon la pression
+function getPressureSize(pressure) {
+  const minSize = Math.max(1, currentSize * 0.3); // 30% minimum
+  const maxSize = currentSize * 1.5; // 150% maximum
+  return minSize + (maxSize - minSize) * pressure;
 }
 
 const emitDrawingThrottled = throttle((data) => {
@@ -79,7 +96,7 @@ socket.on('initShapes', shapes => {
 });
 
 // Drawing and pan handlers
-stage.on('mousedown touchstart', () => {
+stage.on('mousedown touchstart pointerdown', (evt) => {
   const pointer = stage.getPointerPosition();
   if (currentTool === 'pan') {
     lastPanPos = pointer;
@@ -93,6 +110,10 @@ stage.on('mousedown touchstart', () => {
     y: pointer.y - stage.y()
   };
   
+  // Obtenir la pression
+  const pressure = getPressure(evt);
+  const pressureSize = getPressureSize(pressure);
+  
   if (currentTool === 'texture') {
     // Mode texture : émission d'événements ponctuels
     isDrawing = true;
@@ -103,11 +124,11 @@ stage.on('mousedown touchstart', () => {
       x: scenePos.x,
       y: scenePos.y,
       color: currentColor,
-      size: currentSize
+      size: pressureSize
     });
     
     // Créer l'effet local
-    createTextureEffect(scenePos.x, scenePos.y, currentColor, currentSize);
+    createTextureEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
   
@@ -118,8 +139,8 @@ stage.on('mousedown touchstart', () => {
   lastLine = new Konva.Line({
     id: currentId,
     points: [scenePos.x, scenePos.y],
-    stroke: currentTool === 'eraser' ? currentColor : currentColor, // Correction : gomme utilise la couleur aussi
-    strokeWidth: currentSize,
+    stroke: currentTool === 'eraser' ? currentColor : currentColor,
+    strokeWidth: pressureSize,
     globalCompositeOperation: currentTool === 'eraser' ? 'destination-out' : 'source-over',
     lineCap: 'round',
     lineJoin: 'round'
@@ -127,7 +148,7 @@ stage.on('mousedown touchstart', () => {
   layer.add(lastLine);
 });
 
-stage.on('mousemove touchmove', () => {
+stage.on('mousemove touchmove pointermove', (evt) => {
   const pointer = stage.getPointerPosition();
   if (currentTool === 'pan' && lastPanPos) {
     const dx = pointer.x - lastPanPos.x;
@@ -146,32 +167,38 @@ stage.on('mousemove touchmove', () => {
     y: pointer.y - stage.y()
   };
   
+  // Obtenir la pression pour chaque point
+  const pressure = getPressure(evt);
+  const pressureSize = getPressureSize(pressure);
+  
   if (currentTool === 'texture') {
     // Mode texture : continuer l'émission
     socket.emit('texture', {
       x: scenePos.x,
       y: scenePos.y,
       color: currentColor,
-      size: currentSize
+      size: pressureSize
     });
     
-    createTextureEffect(scenePos.x, scenePos.y, currentColor, currentSize);
+    createTextureEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
   
-  // Mode brush normal ou gomme
+  // Mode brush normal ou gomme - ajuster l'épaisseur dynamiquement
   lastLine.points(lastLine.points().concat([scenePos.x, scenePos.y]));
+  lastLine.strokeWidth(pressureSize); // Mettre à jour l'épaisseur
   layer.batchDraw();
+  
   emitDrawingThrottled({
     id: currentId,
     points: lastLine.points(),
     stroke: lastLine.stroke(),
-    strokeWidth: lastLine.strokeWidth(),
+    strokeWidth: pressureSize,
     globalCompositeOperation: lastLine.globalCompositeOperation()
   });
 });
 
-stage.on('mouseup touchend', () => {
+stage.on('mouseup touchend pointerup', () => {
   const pointer = stage.getPointerPosition();
   if (currentTool === 'pan') {
     lastPanPos = null;

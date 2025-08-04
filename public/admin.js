@@ -45,21 +45,21 @@ socket.on('drawing', data => {
   layer.batchDraw();
 });
 
-// Listen for texture brush events
-socket.on('texture', data => {
+// Fonction pour créer l'effet texture (identique à app.js)
+function createTextureEffect(x, y, color, size) {
   for (let i = 0; i < 5; i++) {
     const offsetX = (Math.random() - 0.5) * 10;
     const offsetY = (Math.random() - 0.5) * 10;
     const alpha = 0.3 + Math.random() * 0.3;
     const dot = new Konva.Line({
       points: [
-        data.x + offsetX,
-        data.y + offsetY,
-        data.x + offsetX + Math.random() * 2,
-        data.y + offsetY + Math.random() * 2
+        x + offsetX,
+        y + offsetY,
+        x + offsetX + Math.random() * 2,
+        y + offsetY + Math.random() * 2
       ],
-      stroke: data.color,
-      strokeWidth: 1 + Math.random() * (data.size / 3),
+      stroke: color,
+      strokeWidth: 1 + Math.random() * (size / 3),
       globalAlpha: alpha,
       lineCap: 'round',
       lineJoin: 'round'
@@ -67,6 +67,11 @@ socket.on('texture', data => {
     layer.add(dot);
   }
   layer.batchDraw();
+}
+
+// Listen for texture brush events (corrigé)
+socket.on('texture', data => {
+  createTextureEffect(data.x, data.y, data.color, data.size);
 });
 
 // Final draw event
@@ -118,14 +123,38 @@ const eraserBtn = document.getElementById('eraser');
 const clearBtn = document.getElementById('clear-canvas');
 const exportBtn = document.getElementById('export');
 const backHomeBtn = document.getElementById('back-home');
+const hideUIBtn = document.getElementById('hide-ui');
 const container = stage.container();
 const scaleFactor = 1.2;
 
+// État de l'UI
+let uiVisible = true;
+const toolbar = document.querySelector('.toolbar');
+const minimap = document.getElementById('minimap');
+
 function setActiveButton(activeBtn) {
-  [panBtn, zoomInBtn, zoomOutBtn, resetZoomBtn, bgBlackBtn, bgWhiteBtn, eraserBtn, clearBtn, exportBtn, backHomeBtn]
+  [panBtn, zoomInBtn, zoomOutBtn, resetZoomBtn, bgBlackBtn, bgWhiteBtn, eraserBtn, clearBtn, exportBtn, backHomeBtn, hideUIBtn]
     .forEach(btn => btn.classList.remove('active'));
   activeBtn.classList.add('active');
 }
+
+// Masquer/Afficher UI
+hideUIBtn.addEventListener('click', () => {
+  uiVisible = !uiVisible;
+  
+  if (uiVisible) {
+    toolbar.style.display = 'flex';
+    minimap.style.display = 'block';
+    hideUIBtn.textContent = '👁️';
+    hideUIBtn.title = 'Masquer interface';
+  } else {
+    toolbar.style.display = 'none';
+    minimap.style.display = 'none';
+    hideUIBtn.style.display = 'block'; // Garder juste ce bouton visible
+    hideUIBtn.textContent = '👁️‍🗨️';
+    hideUIBtn.title = 'Afficher interface';
+  }
+});
 
 // Pan
 panBtn.addEventListener('click', () => {
@@ -182,13 +211,51 @@ eraserBtn.addEventListener('click', () => {
   stage.draggable(false);
   container.style.cursor = 'crosshair';
 });
+
 stage.on('click', evt => {
-  if (eraserBtn.classList.contains('active') && evt.target.getClassName() === 'Line') {
-    const shape = evt.target;
-    const id = shape.id();
-    shape.destroy();
-    layer.draw();
-    socket.emit('deleteShape', { id });
+  if (eraserBtn.classList.contains('active')) {
+    const target = evt.target;
+    
+    // Vérifier si c'est une forme (Line ou autre)
+    if (target.getClassName() === 'Line' && target.id()) {
+      const shape = target;
+      const id = shape.id();
+      
+      // Ajouter feedback visuel
+      shape.stroke('#ff0000');
+      shape.opacity(0.5);
+      layer.draw();
+      
+      // Supprimer après court délai
+      setTimeout(() => {
+        shape.destroy();
+        layer.draw();
+        socket.emit('deleteShape', { id });
+      }, 150);
+    }
+  }
+});
+
+// Ajouter feedback au survol en mode gomme
+stage.on('mouseover', evt => {
+  if (eraserBtn.classList.contains('active')) {
+    const target = evt.target;
+    if (target.getClassName() === 'Line' && target.id()) {
+      target.opacity(0.7);
+      layer.draw();
+      container.style.cursor = 'pointer';
+    }
+  }
+});
+
+stage.on('mouseout', evt => {
+  if (eraserBtn.classList.contains('active')) {
+    const target = evt.target;
+    if (target.getClassName() === 'Line' && target.id()) {
+      target.opacity(1);
+      layer.draw();
+      container.style.cursor = 'crosshair';
+    }
   }
 });
 
@@ -215,3 +282,14 @@ backHomeBtn.addEventListener('click', () => {
   setActiveButton(backHomeBtn);
   window.location.href = '/';
 });
+
+// Style spécial pour le bouton masquer UI
+hideUIBtn.style.position = 'fixed';
+hideUIBtn.style.top = '10px';
+hideUIBtn.style.right = '10px';
+hideUIBtn.style.zIndex = '2000';
+hideUIBtn.style.backgroundColor = 'rgba(0,0,0,0.7)';
+hideUIBtn.style.border = '1px solid #666';
+hideUIBtn.style.borderRadius = '50%';
+hideUIBtn.style.width = '40px';
+hideUIBtn.style.height = '40px';
