@@ -14,8 +14,9 @@ let currentSize  = parseInt(document.getElementById('size-slider').value, 10);
 let isDrawing    = false;
 let lastLine;
 let currentId;
-let lastPanPos = null;
-let basePressure = 1; // Pression de base pour souris/doigt
+let isCreatingShape = false;
+let shapePreview = null;
+let shapeStartPos = null;
 
 // Throttle helper
 function throttle(func, wait) {
@@ -58,6 +59,19 @@ const emitTextureThrottled = throttle((data) => {
   socket.emit('texture', data);
 }, 150); // 150ms pour texture
 
+// Throttling pour les nouveaux brushs (effets locaux uniquement - interface publique)
+const createNeonThrottled = throttle((x, y, color, size) => {
+  createNeonEffect(x, y, color, size);
+}, 100);
+
+const createFireThrottled = throttle((x, y, color, size) => {
+  createFireEffect(x, y, color, size);
+}, 120);
+
+const createElectricPublicThrottled = throttle((x, y, color, size) => {
+  createElectricEffectPublic(x, y, color, size);
+}, 80);
+
 // Tool buttons
 document.querySelectorAll('.tool-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -66,6 +80,23 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
     currentTool = btn.id;
     const cursor = currentTool === 'pan' ? 'grab' : 'crosshair';
     stage.container().style.cursor = cursor;
+    
+    // Gestion du bouton formes
+    const shapesPanel = document.getElementById('shapes-palette');
+    if (currentTool === 'shapes') {
+      shapesPanel.style.display = 'flex';
+    } else {
+      shapesPanel.style.display = 'none';
+    }
+  });
+});
+
+// Gestion des formes simples
+document.querySelectorAll('.shape-btn-mini').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.shape-btn-mini').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTool = 'shape-' + btn.dataset.shape;
   });
 });
 
@@ -144,6 +175,34 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     createTextureEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
+
+  if (currentTool === 'neon') {
+    isDrawing = true;
+    currentId = generateId();
+    createNeonThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'fire') {
+    isDrawing = true;
+    currentId = generateId();
+    createFireThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'electric') {
+    isDrawing = true;
+    currentId = generateId();
+    createElectricPublicThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  // Formes prédéfinies simples
+  if (currentTool.startsWith('shape-')) {
+    isCreatingShape = true;
+    shapeStartPos = scenePos;
+    return;
+  }
   
   // Mode brush normal ou gomme
   isDrawing = true;
@@ -196,6 +255,21 @@ stage.on('mousemove touchmove pointermove', (evt) => {
     createTextureEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
+
+  if (currentTool === 'neon') {
+    createNeonThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'fire') {
+    createFireThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'electric') {
+    createElectricPublicThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
   
   // Mode brush normal ou gomme - ajuster l'épaisseur dynamiquement
   lastLine.points(lastLine.points().concat([scenePos.x, scenePos.y]));
@@ -217,11 +291,36 @@ stage.on('mouseup touchend pointerup', () => {
     lastPanPos = null;
     return;
   }
+
+  // Finaliser forme simple
+  if (isCreatingShape && shapePreview) {
+    shapePreview.opacity(1);
+    const shapeId = generateId();
+    shapePreview.id(shapeId);
+    
+    // Émettre la forme créée
+    socket.emit('shapeCreate', {
+      id: shapeId,
+      type: currentTool,
+      config: shapePreview.getAttrs()
+    });
+
+    isCreatingShape = false;
+    shapeStartPos = null;
+    shapePreview = null;
+    return;
+  }
+
   if (!isDrawing) return;
   isDrawing = false;
   
   if (currentTool === 'texture') {
     // Le brush texturé ne crée pas de forme persistante
+    return;
+  }
+
+  if (currentTool === 'neon' || currentTool === 'fire' || currentTool === 'electric') {
+    // Les nouveaux effets ne créent pas de forme persistante
     return;
   }
   

@@ -64,7 +64,150 @@ const createSparklesThrottled = throttle((x, y, color, size) => {
   createSparklesEffect(x, y, color, size);
 }, 100);
 
-// Fonction pour créer l'effet paillettes animé
+// Throttling pour les nouveaux brushs (effets locaux uniquement)
+const createWatercolorThrottled = throttle((x, y, color, size) => {
+  createWatercolorEffect(x, y, color, size);
+}, 120);
+
+const createElectricThrottled = throttle((x, y, color, size) => {
+  createElectricEffect(x, y, color, size);
+}, 100);
+
+const createPetalsThrottled = throttle((x, y, color, size) => {
+  createPetalsEffect(x, y, color, size);
+}, 200);
+
+// Fonction pour créer l'effet aquarelle
+function createWatercolorEffect(x, y, color, size) {
+  const drops = 3 + Math.floor(Math.random() * 4); // 3-6 gouttes
+  
+  for (let i = 0; i < drops; i++) {
+    const offsetX = (Math.random() - 0.5) * size * 1.5;
+    const offsetY = (Math.random() - 0.5) * size * 1.5;
+    const dropSize = size * (0.5 + Math.random() * 0.8);
+    
+    const drop = new Konva.Circle({
+      x: x + offsetX,
+      y: y + offsetY,
+      radius: dropSize,
+      fill: color,
+      opacity: 0.15 + Math.random() * 0.25, // Très transparent
+      scaleX: 0.8 + Math.random() * 0.4,
+      scaleY: 0.8 + Math.random() * 0.4
+    });
+    
+    layer.add(drop);
+    
+    // Animation de diffusion
+    const diffusion = new Konva.Animation((frame) => {
+      const progress = frame.time / 2000; // 2 secondes
+      const scale = 1 + progress * 0.5;
+      const opacity = Math.max(0, drop.opacity() - progress * 0.1);
+      
+      drop.scaleX(scale);
+      drop.scaleY(scale);
+      drop.opacity(opacity);
+      
+      if (progress >= 1 || opacity <= 0) {
+        drop.destroy();
+        diffusion.stop();
+      }
+    }, layer);
+    
+    diffusion.start();
+  }
+  layer.batchDraw();
+}
+
+// Fonction pour créer l'effet électrique
+function createElectricEffect(x, y, color, size) {
+  const bolts = 2 + Math.floor(Math.random() * 3); // 2-4 éclairs
+  
+  for (let i = 0; i < bolts; i++) {
+    const points = [x, y];
+    const segments = 5 + Math.floor(Math.random() * 5); // 5-9 segments
+    
+    let currentX = x;
+    let currentY = y;
+    
+    // Créer un zigzag aléatoire
+    for (let j = 0; j < segments; j++) {
+      currentX += (Math.random() - 0.5) * size * 0.8;
+      currentY += (Math.random() - 0.5) * size * 0.8;
+      points.push(currentX, currentY);
+    }
+    
+    const bolt = new Konva.Line({
+      points: points,
+      stroke: color,
+      strokeWidth: 1 + Math.random() * 2,
+      opacity: 0.7 + Math.random() * 0.3,
+      lineCap: 'round',
+      tension: 0.1
+    });
+    
+    layer.add(bolt);
+    
+    // Animation de scintillement
+    const flicker = new Konva.Animation((frame) => {
+      const opacity = 0.3 + Math.sin(frame.time * 0.02) * 0.4;
+      bolt.opacity(opacity);
+      
+      if (frame.time > 1500) { // 1.5 secondes
+        bolt.destroy();
+        flicker.stop();
+      }
+    }, layer);
+    
+    flicker.start();
+  }
+  layer.batchDraw();
+}
+
+// Fonction pour créer l'effet pétales
+function createPetalsEffect(x, y, color, size) {
+  const petals = 4 + Math.floor(Math.random() * 4); // 4-7 pétales
+  
+  for (let i = 0; i < petals; i++) {
+    const offsetX = (Math.random() - 0.5) * size;
+    const offsetY = (Math.random() - 0.5) * size;
+    const petalSize = size * (0.3 + Math.random() * 0.4);
+    
+    const petal = new Konva.Ellipse({
+      x: x + offsetX,
+      y: y + offsetY,
+      radiusX: petalSize,
+      radiusY: petalSize * 0.6,
+      fill: color,
+      opacity: 0.6 + Math.random() * 0.3,
+      rotation: Math.random() * 360,
+      scaleX: 0.8 + Math.random() * 0.4,
+      scaleY: 0.8 + Math.random() * 0.4
+    });
+    
+    layer.add(petal);
+    
+    // Animation de rotation et chute
+    const fall = new Konva.Animation((frame) => {
+      const progress = frame.time / 3000; // 3 secondes
+      const rotation = petal.rotation() + 2;
+      const y = petal.y() + 0.5;
+      const opacity = Math.max(0, petal.opacity() - progress * 0.2);
+      
+      petal.rotation(rotation);
+      petal.y(y);
+      petal.opacity(opacity);
+      
+      if (progress >= 1 || opacity <= 0) {
+        petal.destroy();
+        fall.stop();
+      }
+    }, layer);
+    
+    fall.start();
+  }
+  layer.batchDraw();
+}
 function createSparklesEffect(x, y, color, size) {
   const sparkleCount = 8 + Math.floor(Math.random() * 5); // 8-12 paillettes
   
@@ -445,6 +588,27 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     return;
   }
 
+  if (currentTool === 'watercolor') {
+    isDrawing = true;
+    currentId = generateId();
+    createWatercolorThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'electric') {
+    isDrawing = true;
+    currentId = generateId();
+    createElectricThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'petals') {
+    isDrawing = true;
+    currentId = generateId();
+    createPetalsThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
   // Dessin normal
   isDrawing = true;
   currentId = generateId();
@@ -541,6 +705,21 @@ stage.on('mousemove touchmove pointermove', (evt) => {
   if (currentTool === 'sparkles') {
     // Continuer l'effet paillettes (local uniquement)
     createSparklesThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'watercolor') {
+    createWatercolorThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'electric') {
+    createElectricThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
+    return;
+  }
+
+  if (currentTool === 'petals') {
+    createPetalsThrottled(scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
 

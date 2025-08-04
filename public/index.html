@@ -16,8 +16,12 @@
     <div class="tools">
       <button id="brush" class="tool-btn active" title="Stylo">🖋️</button>
       <button id="texture" class="tool-btn" title="Pinceau texturé">🖌️</button>
+      <button id="neon" class="tool-btn" title="Néon">🌟</button>
+      <button id="fire" class="tool-btn" title="Feu">🔥</button>
+      <button id="electric" class="tool-btn" title="Électrique">⚡</button>
       <button id="eraser" class="tool-btn" title="Gomme">🧽</button>
       <button id="pan" class="tool-btn" title="Déplacement">✋</button>
+      <button id="shapes" class="tool-btn" title="Formes">🔺</button>
     </div>
 
     <div class="colors">
@@ -29,6 +33,13 @@
     </div>
 
     <input type="range" id="size-slider" min="1" max="40" value="4" />
+  </div>
+
+  <!-- Mini palette formes (masquée par défaut) -->
+  <div id="shapes-palette" class="shapes-palette" style="display: none;">
+    <button class="shape-btn-mini" data-shape="circle" title="Cercle">⭕</button>
+    <button class="shape-btn-mini" data-shape="rectangle" title="Rectangle">⬜</button>
+    <button class="shape-btn-mini" data-shape="line" title="Ligne">📏</button>
   </div>
 </body>
 </html>
