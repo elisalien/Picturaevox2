@@ -511,10 +511,6 @@ document.getElementById('back-home').addEventListener('click', () => {
   window.location.href = '/';
 });
 
-document.getElementById('to-admin').addEventListener('click', () => {
-  window.location.href = '/chantilly';
-});
-
 // Socket listeners (identiques aux autres interfaces)
 socket.on('initShapes', shapes => {
   shapes.forEach(data => {
