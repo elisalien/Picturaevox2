@@ -1,4 +1,4 @@
-// public/app.js - VERSION SIMPLIFIÉE AVEC BRUSH MANAGER
+// public/app.js - VERSION CORRIGÉE ET FONCTIONNELLE
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -14,12 +14,22 @@ let currentSize  = parseInt(document.getElementById('size-slider').value, 10);
 let isDrawing    = false;
 let lastLine;
 let currentId;
+let lastPanPos = null;
 let isCreatingShape = false;
 let shapePreview = null;
 let shapeStartPos = null;
 
-// === INITIALISER LE BRUSH MANAGER ===
-const brushManager = new BrushManager('public', layer, socket);
+// === INITIALISER LE BRUSH MANAGER APRÈS CHARGEMENT ===
+let brushManager;
+
+// Attendre que BrushManager soit disponible
+window.addEventListener('DOMContentLoaded', () => {
+  if (typeof BrushManager !== 'undefined') {
+    brushManager = new BrushManager('public', layer, socket);
+  } else {
+    console.error('BrushManager not loaded');
+  }
+});
 
 // === UTILITAIRES ===
 function throttle(func, wait) {
@@ -63,9 +73,11 @@ const emitTextureThrottled = throttle((data) => {
 // Tool buttons
 document.querySelectorAll('.tool-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    console.log('Tool clicked:', btn.id); // Debug
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentTool = btn.id;
+    console.log('Current tool set to:', currentTool); // Debug
     const cursor = currentTool === 'pan' ? 'grab' : 'crosshair';
     stage.container().style.cursor = cursor;
     
@@ -84,6 +96,7 @@ document.querySelectorAll('.shape-btn-mini').forEach(btn => {
     document.querySelectorAll('.shape-btn-mini').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentTool = 'shape-' + btn.dataset.shape;
+    console.log('Shape tool set to:', currentTool); // Debug
   });
 });
 
@@ -93,12 +106,14 @@ document.querySelectorAll('.color-btn').forEach(btn => {
     document.querySelectorAll('.color-btn').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
     currentColor = btn.dataset.color;
+    console.log('Color set to:', currentColor); // Debug
   });
 });
 
 // Size slider
 document.getElementById('size-slider').addEventListener('input', e => {
   currentSize = parseInt(e.target.value, 10);
+  console.log('Size set to:', currentSize); // Debug
 });
 
 // Raccourci Ctrl+Z pour undo
@@ -112,6 +127,8 @@ document.addEventListener('keydown', (e) => {
 // === ÉVÉNEMENTS DE DESSIN ===
 
 stage.on('mousedown touchstart pointerdown', (evt) => {
+  console.log('Mouse down, current tool:', currentTool); // Debug
+  
   const pointer = stage.getPointerPosition();
   if (currentTool === 'pan') {
     lastPanPos = pointer;
@@ -142,9 +159,14 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
 
   // BRUSH ANIMÉS - Utilisation du BrushManager
   if (['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
+    console.log('Using brush manager for:', currentTool); // Debug
     isDrawing = true;
     currentId = generateId();
-    brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
+    if (brushManager) {
+      brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
+    } else {
+      console.error('BrushManager not available');
+    }
     return;
   }
 
@@ -156,6 +178,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   }
   
   // Mode brush normal ou gomme
+  console.log('Normal brush drawing'); // Debug
   isDrawing = true;
   currentId = generateId();
   
@@ -169,6 +192,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     lineJoin: 'round'
   });
   layer.add(lastLine);
+  layer.batchDraw();
 });
 
 stage.on('mousemove touchmove pointermove', (evt) => {
@@ -206,26 +230,29 @@ stage.on('mousemove touchmove pointermove', (evt) => {
 
   // BRUSH ANIMÉS - Continuer l'effet avec BrushManager
   if (['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
-    brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
+    if (brushManager) {
+      brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
+    }
     return;
   }
   
   // Mode brush normal ou gomme
-  lastLine.points(lastLine.points().concat([scenePos.x, scenePos.y]));
-  lastLine.strokeWidth(pressureSize);
-  layer.batchDraw();
-  
-  emitDrawingThrottled({
-    id: currentId,
-    points: lastLine.points(),
-    stroke: lastLine.stroke(),
-    strokeWidth: pressureSize,
-    globalCompositeOperation: lastLine.globalCompositeOperation()
-  });
+  if (lastLine) {
+    lastLine.points(lastLine.points().concat([scenePos.x, scenePos.y]));
+    lastLine.strokeWidth(pressureSize);
+    layer.batchDraw();
+    
+    emitDrawingThrottled({
+      id: currentId,
+      points: lastLine.points(),
+      stroke: lastLine.stroke(),
+      strokeWidth: pressureSize,
+      globalCompositeOperation: lastLine.globalCompositeOperation()
+    });
+  }
 });
 
 stage.on('mouseup touchend pointerup', () => {
-  const pointer = stage.getPointerPosition();
   if (currentTool === 'pan') {
     lastPanPos = null;
     return;
@@ -256,13 +283,15 @@ stage.on('mouseup touchend pointerup', () => {
     return;
   }
   
-  socket.emit('draw', {
-    id: currentId,
-    points: lastLine.points(),
-    stroke: lastLine.stroke(),
-    strokeWidth: lastLine.strokeWidth(),
-    globalCompositeOperation: lastLine.globalCompositeOperation()
-  });
+  if (lastLine) {
+    socket.emit('draw', {
+      id: currentId,
+      points: lastLine.points(),
+      stroke: lastLine.stroke(),
+      strokeWidth: lastLine.strokeWidth(),
+      globalCompositeOperation: lastLine.globalCompositeOperation()
+    });
+  }
 });
 
 // === EFFET TEXTURE (ancien système) ===
@@ -310,12 +339,16 @@ socket.on('initShapes', shapes => {
 
 // Écouter les brush effects des autres utilisateurs - UTILISE LE BRUSH MANAGER
 socket.on('brushEffect', (data) => {
-  brushManager.createNetworkEffect(data);
+  if (brushManager) {
+    brushManager.createNetworkEffect(data);
+  }
 });
 
 // Nettoyage des effets d'un utilisateur déconnecté - UTILISE LE BRUSH MANAGER
 socket.on('cleanupUserEffects', (data) => {
-  brushManager.cleanupUserEffects(data.socketId);
+  if (brushManager) {
+    brushManager.cleanupUserEffects(data.socketId);
+  }
 });
 
 // Socket listeners existants
@@ -375,14 +408,18 @@ socket.on('deleteShape', ({ id }) => {
 socket.on('clearCanvas', () => {
   layer.destroyChildren();
   // UTILISE LE BRUSH MANAGER pour nettoyer les traces permanentes
-  brushManager.clearPermanentTraces();
+  if (brushManager) {
+    brushManager.clearPermanentTraces();
+  }
   layer.draw();
 });
 
 socket.on('restoreShapes', (shapes) => {
   layer.destroyChildren();
   // UTILISE LE BRUSH MANAGER pour nettoyer les traces permanentes
-  brushManager.clearPermanentTraces();
+  if (brushManager) {
+    brushManager.clearPermanentTraces();
+  }
   
   shapes.forEach(data => {
     const line = new Konva.Line({
@@ -422,3 +459,7 @@ socket.on('shapeCreate', data => {
     layer.draw();
   }
 });
+
+// Debug - Vérifier que tout est chargé
+console.log('App.js loaded, current tool:', currentTool);
+console.log('BrushManager available:', typeof BrushManager !== 'undefined');
