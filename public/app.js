@@ -1,4 +1,4 @@
-// public/app.js - VERSION CORRIGÉE BRUSHMANAGER
+// public/app.js - VERSION CORRIGÉE AVEC CHARGEMENT ROBUSTE
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -7,6 +7,9 @@ const stage = new Konva.Stage({
 });
 const layer = new Konva.Layer();
 stage.add(layer);
+
+// Rendre stage disponible globalement pour BrushManager
+window.stage = stage;
 
 let currentTool  = 'brush';
 let currentColor = document.querySelector('.color-btn.active').dataset.color;
@@ -19,40 +22,54 @@ let isCreatingShape = false;
 let shapePreview = null;
 let shapeStartPos = null;
 
-// === INITIALISER LE BRUSH MANAGER DE FAÇON ROBUSTE ===
-let brushManager;
+// === CHARGEMENT ROBUSTE DU BRUSH MANAGER ===
+let brushManager = null;
+let brushManagerRetryCount = 0;
+const MAX_RETRY_COUNT = 10;
 
-// Fonction pour initialiser le BrushManager
+// Fonction d'initialisation robuste
 function initBrushManager() {
-  if (typeof BrushManager !== 'undefined') {
-    brushManager = new BrushManager('public', layer, socket);
-    console.log('BrushManager initialized for public');
-    return true;
-  }
-  return false;
-}
-
-// Essayer d'initialiser immédiatement
-if (!initBrushManager()) {
-  // Si pas disponible, attendre le chargement du DOM
-  document.addEventListener('DOMContentLoaded', () => {
-    if (!initBrushManager()) {
-      // Si toujours pas disponible, attendre un peu plus
-      setTimeout(() => {
-        if (!initBrushManager()) {
-          console.error('BrushManager could not be loaded');
+  return new Promise((resolve, reject) => {
+    const attemptInit = () => {
+      if (typeof BrushManager !== 'undefined') {
+        try {
+          brushManager = new BrushManager('public', layer, socket);
+          console.log('✅ BrushManager initialized successfully for public interface');
+          resolve(brushManager);
+        } catch (error) {
+          console.error('❌ Error creating BrushManager:', error);
+          reject(error);
         }
-      }, 100);
-    }
+      } else {
+        brushManagerRetryCount++;
+        if (brushManagerRetryCount < MAX_RETRY_COUNT) {
+          console.log(`⏳ BrushManager not ready, retry ${brushManagerRetryCount}/${MAX_RETRY_COUNT}...`);
+          setTimeout(attemptInit, 200);
+        } else {
+          console.error('❌ BrushManager failed to load after max retries');
+          reject(new Error('BrushManager unavailable'));
+        }
+      }
+    };
+    
+    attemptInit();
   });
 }
 
+// Initialisation avec gestion d'erreur
+let brushManagerReady = false;
+initBrushManager()
+  .then(() => {
+    brushManagerReady = true;
+  })
+  .catch((error) => {
+    console.error('BrushManager initialization failed:', error);
+    brushManagerReady = false;
+  });
+
 // Fonction pour obtenir le BrushManager de façon sûre
 function getBrushManager() {
-  if (!brushManager && typeof BrushManager !== 'undefined') {
-    initBrushManager();
-  }
-  return brushManager;
+  return brushManagerReady ? brushManager : null;
 }
 
 // === UTILITAIRES ===
@@ -97,12 +114,10 @@ const emitTextureThrottled = throttle((data) => {
 // Tool buttons
 document.querySelectorAll('.tool-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    console.log('Tool clicked:', btn.id); // Debug
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentTool = btn.id;
-    console.log('Current tool set to:', currentTool); // Debug
-    console.log('BrushManager available:', !!getBrushManager()); // Debug
+    
     const cursor = currentTool === 'pan' ? 'grab' : 'crosshair';
     stage.container().style.cursor = cursor;
     
@@ -121,7 +136,6 @@ document.querySelectorAll('.shape-btn-mini').forEach(btn => {
     document.querySelectorAll('.shape-btn-mini').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentTool = 'shape-' + btn.dataset.shape;
-    console.log('Shape tool set to:', currentTool); // Debug
   });
 });
 
@@ -131,14 +145,12 @@ document.querySelectorAll('.color-btn').forEach(btn => {
     document.querySelectorAll('.color-btn').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
     currentColor = btn.dataset.color;
-    console.log('Color set to:', currentColor); // Debug
   });
 });
 
 // Size slider
 document.getElementById('size-slider').addEventListener('input', e => {
   currentSize = parseInt(e.target.value, 10);
-  console.log('Size set to:', currentSize); // Debug
 });
 
 // Raccourci Ctrl+Z pour undo
@@ -152,8 +164,6 @@ document.addEventListener('keydown', (e) => {
 // === ÉVÉNEMENTS DE DESSIN ===
 
 stage.on('mousedown touchstart pointerdown', (evt) => {
-  console.log('Mouse down, current tool:', currentTool); // Debug
-  
   const pointer = stage.getPointerPosition();
   if (currentTool === 'pan') {
     lastPanPos = pointer;
@@ -182,19 +192,16 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     return;
   }
 
-  // BRUSH ANIMÉS - Utilisation du BrushManager avec vérification
+  // BRUSH ANIMÉS - Utilisation du BrushManager avec vérification robuste
   if (['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
-    console.log('Using brush manager for:', currentTool); // Debug
     isDrawing = true;
     currentId = generateId();
     
     const manager = getBrushManager();
     if (manager) {
-      console.log('BrushManager found, creating effect'); // Debug
       manager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     } else {
-      console.error('BrushManager not available for', currentTool);
-      // Fallback : créer un effet simple
+      console.warn('🔶 BrushManager not ready, using fallback for', currentTool);
       createSimpleFallbackEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     }
     return;
@@ -208,7 +215,6 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   }
   
   // Mode brush normal ou gomme
-  console.log('Normal brush drawing'); // Debug
   isDrawing = true;
   currentId = generateId();
   
@@ -264,7 +270,6 @@ stage.on('mousemove touchmove pointermove', (evt) => {
     if (manager) {
       manager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     } else {
-      // Fallback
       createSimpleFallbackEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     }
     return;
@@ -354,8 +359,6 @@ function createTextureEffect(x, y, color, size) {
 
 // === FALLBACK SIMPLE POUR LES BRUSH ANIMÉS ===
 function createSimpleFallbackEffect(x, y, color, size) {
-  console.log('Using fallback effect for brush'); // Debug
-  // Créer un effet simple visible pour vérifier que ça marche
   const circle = new Konva.Circle({
     x: x,
     y: y,
@@ -403,7 +406,7 @@ socket.on('brushEffect', (data) => {
   if (manager) {
     manager.createNetworkEffect(data);
   } else {
-    console.warn('BrushManager not available for network effect');
+    console.warn('🔶 BrushManager not ready for network effect, skipping');
   }
 });
 
@@ -526,6 +529,4 @@ socket.on('shapeCreate', data => {
   }
 });
 
-// Debug - Vérifier que tout est chargé
-console.log('App.js loaded, current tool:', currentTool);
-console.log('BrushManager available at startup:', typeof BrushManager !== 'undefined');
+console.log('✅ App.js loaded for public interface');

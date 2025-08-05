@@ -1,4 +1,4 @@
-// public/admin.js - VERSION CORRIGÉE
+// public/admin.js - VERSION CORRIGÉE AVEC OPTIMISATION ZONE VISIBLE
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -8,18 +8,58 @@ const stage = new Konva.Stage({
 const layer = new Konva.Layer();
 stage.add(layer);
 
-// === INITIALISER LE BRUSH MANAGER (ADMIN = SPECTATEUR HAUTE QUALITÉ) ===
-let brushManager;
+// Rendre stage disponible globalement pour BrushManager
+window.stage = stage;
 
-// Attendre que BrushManager soit disponible
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof BrushManager !== 'undefined') {
-    brushManager = new BrushManager('admin', layer, null); // null car admin ne dessine pas
-    console.log('BrushManager initialized for admin');
-  } else {
-    console.error('BrushManager not available on admin');
-  }
-});
+// === CHARGEMENT ROBUSTE DU BRUSH MANAGER (ADMIN = SPECTATEUR HAUTE QUALITÉ) ===
+let brushManager = null;
+let brushManagerRetryCount = 0;
+const MAX_RETRY_COUNT = 10;
+
+// Fonction d'initialisation robuste
+function initBrushManager() {
+  return new Promise((resolve, reject) => {
+    const attemptInit = () => {
+      if (typeof BrushManager !== 'undefined') {
+        try {
+          brushManager = new BrushManager('admin', layer, null); // null car admin ne dessine pas
+          console.log('✅ BrushManager initialized successfully for admin interface (high quality + viewport optimization)');
+          resolve(brushManager);
+        } catch (error) {
+          console.error('❌ Error creating BrushManager:', error);
+          reject(error);
+        }
+      } else {
+        brushManagerRetryCount++;
+        if (brushManagerRetryCount < MAX_RETRY_COUNT) {
+          console.log(`⏳ BrushManager not ready, retry ${brushManagerRetryCount}/${MAX_RETRY_COUNT}...`);
+          setTimeout(attemptInit, 200);
+        } else {
+          console.error('❌ BrushManager failed to load after max retries');
+          reject(new Error('BrushManager unavailable'));
+        }
+      }
+    };
+    
+    attemptInit();
+  });
+}
+
+// Initialisation avec gestion d'erreur
+let brushManagerReady = false;
+initBrushManager()
+  .then(() => {
+    brushManagerReady = true;
+  })
+  .catch((error) => {
+    console.error('BrushManager initialization failed:', error);
+    brushManagerReady = false;
+  });
+
+// Fonction pour obtenir le BrushManager de façon sûre
+function getBrushManager() {
+  return brushManagerReady ? brushManager : null;
+}
 
 // === SOCKET LISTENERS POUR RÉCEPTION D'EFFETS ===
 
@@ -84,10 +124,13 @@ function createTextureEffect(x, y, color, size) {
   layer.batchDraw();
 }
 
-// BRUSH EFFECTS - Utilise le BrushManager haute qualité
+// BRUSH EFFECTS - Utilise le BrushManager haute qualité avec optimisation zone visible
 socket.on('brushEffect', (data) => {
-  if (brushManager) {
-    brushManager.createNetworkEffect(data);
+  const manager = getBrushManager();
+  if (manager) {
+    manager.createNetworkEffect(data);
+  } else {
+    console.warn('🔶 BrushManager not ready for network effect, skipping');
   }
 });
 
@@ -96,8 +139,9 @@ socket.on('texture', data => {
 });
 
 socket.on('cleanupUserEffects', (data) => {
-  if (brushManager) {
-    brushManager.cleanupUserEffects(data.socketId);
+  const manager = getBrushManager();
+  if (manager) {
+    manager.cleanupUserEffects(data.socketId);
   }
 });
 
@@ -134,8 +178,9 @@ socket.on('deleteShape', ({ id }) => {
 socket.on('clearCanvas', () => {
   layer.destroyChildren();
   // UTILISE LE BRUSH MANAGER pour nettoyer les traces permanentes
-  if (brushManager) {
-    brushManager.clearPermanentTraces();
+  const manager = getBrushManager();
+  if (manager) {
+    manager.clearPermanentTraces();
   }
   layer.draw();
 });
@@ -143,8 +188,9 @@ socket.on('clearCanvas', () => {
 socket.on('restoreShapes', (shapes) => {
   layer.destroyChildren();
   // UTILISE LE BRUSH MANAGER pour nettoyer les traces permanentes
-  if (brushManager) {
-    brushManager.clearPermanentTraces();
+  const manager = getBrushManager();
+  if (manager) {
+    manager.clearPermanentTraces();
   }
   
   shapes.forEach(data => {
@@ -216,87 +262,105 @@ const minimap = document.getElementById('minimap');
 
 function setActiveButton(activeBtn) {
   [panBtn, zoomInBtn, zoomOutBtn, resetZoomBtn, bgBlackBtn, bgWhiteBtn, eraserBtn, clearBtn, exportBtn, backHomeBtn, hideUIBtn]
-    .forEach(btn => btn.classList.remove('active'));
-  activeBtn.classList.add('active');
+    .forEach(btn => btn?.classList.remove('active'));
+  activeBtn?.classList.add('active');
 }
 
 // Masquer/Afficher UI
-hideUIBtn.addEventListener('click', () => {
+hideUIBtn?.addEventListener('click', () => {
   uiVisible = !uiVisible;
   
   if (uiVisible) {
     toolbar.style.display = 'flex';
-    minimap.style.display = 'block';
+    if (minimap) minimap.style.display = 'block';
     hideUIBtn.textContent = '👁️';
     hideUIBtn.title = 'Masquer interface';
   } else {
     toolbar.style.display = 'none';
-    minimap.style.display = 'none';
+    if (minimap) minimap.style.display = 'none';
     hideUIBtn.style.display = 'block';
     hideUIBtn.textContent = '👁️‍🗨️';
     hideUIBtn.title = 'Afficher interface';
   }
 });
 
-// Pan
-panBtn.addEventListener('click', () => {
+// Pan avec notification de mise à jour viewport
+panBtn?.addEventListener('click', () => {
   setActiveButton(panBtn);
   stage.draggable(true);
   container.style.cursor = 'grab';
 });
 
-// Zoom in
-zoomInBtn.addEventListener('click', () => {
+// Zoom in avec notification de mise à jour viewport
+zoomInBtn?.addEventListener('click', () => {
   setActiveButton(zoomInBtn);
   stage.draggable(false);
   const oldScale = stage.scaleX();
   stage.scale({ x: oldScale * scaleFactor, y: oldScale * scaleFactor });
   stage.batchDraw();
   container.style.cursor = 'crosshair';
+  
+  // Notifier le BrushManager du changement de viewport
+  const manager = getBrushManager();
+  if (manager && manager.updateViewportBounds) {
+    setTimeout(() => manager.updateViewportBounds(), 50);
+  }
 });
 
-// Zoom out
-zoomOutBtn.addEventListener('click', () => {
+// Zoom out avec notification de mise à jour viewport
+zoomOutBtn?.addEventListener('click', () => {
   setActiveButton(zoomOutBtn);
   stage.draggable(false);
   const oldScale = stage.scaleX();
   stage.scale({ x: oldScale / scaleFactor, y: oldScale / scaleFactor });
   stage.batchDraw();
   container.style.cursor = 'crosshair';
+  
+  // Notifier le BrushManager du changement de viewport
+  const manager = getBrushManager();
+  if (manager && manager.updateViewportBounds) {
+    setTimeout(() => manager.updateViewportBounds(), 50);
+  }
 });
 
-// Reset zoom
-resetZoomBtn.addEventListener('click', () => {
+// Reset zoom avec notification de mise à jour viewport
+resetZoomBtn?.addEventListener('click', () => {
   setActiveButton(panBtn);
   stage.scale({ x: 1, y: 1 });
   stage.position({ x: 0, y: 0 });
   stage.batchDraw();
   stage.draggable(true);
   container.style.cursor = 'grab';
+  
+  // Notifier le BrushManager du changement de viewport
+  const manager = getBrushManager();
+  if (manager && manager.updateViewportBounds) {
+    setTimeout(() => manager.updateViewportBounds(), 50);
+  }
 });
 
 // Background toggle
-bgBlackBtn.addEventListener('click', () => {
+bgBlackBtn?.addEventListener('click', () => {
   bgBlackBtn.classList.add('active');
-  bgWhiteBtn.classList.remove('active');
+  bgWhiteBtn?.classList.remove('active');
   container.style.backgroundColor = '#000';
 });
 
-bgWhiteBtn.addEventListener('click', () => {
+bgWhiteBtn?.addEventListener('click', () => {
   bgWhiteBtn.classList.add('active');
-  bgBlackBtn.classList.remove('active');
+  bgBlackBtn?.classList.remove('active');
   container.style.backgroundColor = '#fff';
 });
 
 // Eraser (object deletion)
-eraserBtn.addEventListener('click', () => {
+eraserBtn?.addEventListener('click', () => {
   setActiveButton(eraserBtn);
   stage.draggable(false);
   container.style.cursor = 'crosshair';
 });
 
 stage.on('click', evt => {
-  if (eraserBtn.classList.contains('active')) {
+  if (eraserBtn?.classList.contains('active')) {
     const target = evt.target;
     
     if (target.getClassName() === 'Line' && target.id()) {
@@ -318,7 +382,7 @@ stage.on('click', evt => {
 
 // Feedback au survol en mode gomme
 stage.on('mouseover', evt => {
-  if (eraserBtn.classList.contains('active')) {
+  if (eraserBtn?.classList.contains('active')) {
     const target = evt.target;
     if (target.getClassName() === 'Line' && target.id()) {
       target.opacity(0.7);
@@ -329,7 +393,7 @@ stage.on('mouseover', evt => {
 });
 
 stage.on('mouseout', evt => {
-  if (eraserBtn.classList.contains('active')) {
+  if (eraserBtn?.classList.contains('active')) {
     const target = evt.target;
     if (target.getClassName() === 'Line' && target.id()) {
       target.opacity(1);
@@ -340,43 +404,87 @@ stage.on('mouseout', evt => {
 });
 
 // Clear canvas
-clearBtn.addEventListener('click', () => {
+clearBtn?.addEventListener('click', () => {
   setActiveButton(clearBtn);
   layer.destroyChildren();
-  if (brushManager) {
-    brushManager.clearPermanentTraces();
+  const manager = getBrushManager();
+  if (manager) {
+    manager.clearPermanentTraces();
   }
   layer.draw();
   socket.emit('clearCanvas');
 });
 
 // Export PNG
-exportBtn.addEventListener('click', () => {
+exportBtn?.addEventListener('click', () => {
   setActiveButton(exportBtn);
   const uri = stage.toDataURL({ pixelRatio: 3 });
   const link = document.createElement('a');
-  link.download = 'canvas.png';
+  link.download = 'chantilly-canvas.png';
   link.href = uri;
   link.click();
 });
 
 // Back to public
-backHomeBtn.addEventListener('click', () => {
+backHomeBtn?.addEventListener('click', () => {
   setActiveButton(backHomeBtn);
   window.location.href = '/';
 });
 
 // Style spécial pour le bouton masquer UI
-hideUIBtn.style.position = 'fixed';
-hideUIBtn.style.top = '10px';
-hideUIBtn.style.right = '10px';
-hideUIBtn.style.zIndex = '2000';
-hideUIBtn.style.backgroundColor = 'rgba(0,0,0,0.7)';
-hideUIBtn.style.border = '1px solid #666';
-hideUIBtn.style.borderRadius = '50%';
-hideUIBtn.style.width = '40px';
-hideUIBtn.style.height = '40px';
+if (hideUIBtn) {
+  hideUIBtn.style.position = 'fixed';
+  hideUIBtn.style.top = '10px';
+  hideUIBtn.style.right = '10px';
+  hideUIBtn.style.zIndex = '2000';
+  hideUIBtn.style.backgroundColor = 'rgba(0,0,0,0.7)';
+  hideUIBtn.style.border = '1px solid #666';
+  hideUIBtn.style.borderRadius = '50%';
+  hideUIBtn.style.width = '40px';
+  hideUIBtn.style.height = '40px';
+}
 
-// Debug
-console.log('Admin.js loaded');
-console.log('BrushManager available:', typeof BrushManager !== 'undefined');
+// === ÉVÉNEMENTS DE DÉPLACEMENT POUR OPTIMISATION VIEWPORT ===
+
+// Mise à jour du viewport lors du drag
+stage.on('dragend', () => {
+  const manager = getBrushManager();
+  if (manager && manager.updateViewportBounds) {
+    manager.updateViewportBounds();
+  }
+});
+
+// Mise à jour du viewport lors du zoom molette
+stage.on('wheel', (e) => {
+  e.evt.preventDefault();
+  
+  const scaleBy = 1.1;
+  const pointer = stage.getPointerPosition();
+  const mousePointTo = {
+    x: (pointer.x - stage.x()) / stage.scaleX(),
+    y: (pointer.y - stage.y()) / stage.scaleY(),
+  };
+
+  let direction = e.evt.deltaY > 0 ? -1 : 1;
+  let newScale = stage.scaleX() * (scaleBy ** direction);
+  
+  newScale = Math.max(0.1, Math.min(5, newScale));
+  
+  stage.scale({ x: newScale, y: newScale });
+  
+  const newPos = {
+    x: pointer.x - mousePointTo.x * newScale,
+    y: pointer.y - mousePointTo.y * newScale,
+  };
+  stage.position(newPos);
+  stage.batchDraw();
+  
+  // Notifier le BrushManager du changement de viewport après un délai
+  const manager = getBrushManager();
+  if (manager && manager.updateViewportBounds) {
+    setTimeout(() => manager.updateViewportBounds(), 100);
+  }
+});
+
+console.log('✅ Admin.js loaded for chantilly interface with viewport optimization');
+console.log('🎯 High quality brush effects enabled with zone visible optimization');
