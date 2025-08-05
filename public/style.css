@@ -29,11 +29,86 @@ body {
   z-index: 1000;
   flex-wrap: wrap;
   max-width: 95vw;
+  
+  /* CORRECTIONS MOBILES CRITIQUES */
+  min-height: 48px; /* Hauteur minimum pour touch */
+  backdrop-filter: blur(10px); /* Meilleure visibilité */
+  border: 1px solid rgba(255,255,255,0.1); /* Bordure subtile */
+}
+
+/* RESPONSIVE MOBILE FIRST */
+@media (max-width: 768px) {
+  .toolbar {
+    bottom: 10px; /* Plus proche du bord sur mobile */
+    padding: 10px 8px; /* Plus de padding tactile */
+    gap: 12px; /* Espacement réduit mais suffisant */
+    max-width: 98vw; /* Utilise plus d'espace écran */
+    justify-content: center; /* Centre les éléments */
+    flex-wrap: wrap; /* Permet le retour à la ligne */
+  }
+  
+  .tools, .colors {
+    gap: 8px; /* Espacement adapté mobile */
+  }
+  
+  .tool-btn {
+    min-width: 44px; /* Taille tactile recommandée iOS/Android */
+    min-height: 44px; /* Taille tactile recommandée */
+    font-size: 18px; /* Plus grand pour visibilité mobile */
+  }
+  
+  .color-btn {
+    width: 32px; /* Plus grand sur mobile */
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid #333; /* Bordure plus épaisse */
+  }
+  
+  #size-slider {
+    width: 80px; /* Slider plus court sur mobile */
+    height: 44px; /* Plus haut pour faciliter manipulation */
+  }
+}
+
+/* TRÈS PETITS ÉCRANS (< 480px) */
+@media (max-width: 480px) {
+  .toolbar {
+    bottom: 5px;
+    padding: 8px 6px;
+    gap: 8px;
+    max-width: 99vw;
+    border-radius: 6px;
+  }
+  
+  .tools {
+    flex-wrap: wrap; /* Outils sur plusieurs lignes si nécessaire */
+    justify-content: center;
+    max-width: 100%;
+  }
+  
+  .tool-btn {
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 16px;
+    margin: 2px; /* Petit espacement */
+  }
+  
+  .color-btn {
+    width: 28px;
+    height: 28px;
+    margin: 1px;
+  }
+  
+  #size-slider {
+    width: 60px;
+    margin-top: 4px; /* Séparation visuelle */
+  }
 }
 
 .tools, .colors {
   display: flex;
   gap: 8px;
+  align-items: center; /* Alignement vertical */
 }
 
 .tool-btn {
@@ -48,16 +123,22 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
+  /* AMÉLIORATIONS TACTILES */
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .tool-btn:hover,
 .tool-btn:active {
   background-color: #666;
+  transform: scale(1.05); /* Feedback visuel */
 }
 
 .tool-btn.active {
   background-color: #6b5bff;
+  box-shadow: 0 0 8px rgba(107, 91, 255, 0.5); /* Glow pour l'état actif */
 }
 
 .color-btn {
@@ -66,17 +147,55 @@ body {
   border-radius: 50%;
   border: 2px solid #333;
   cursor: pointer;
-  transition: transform 0.2s, border-color 0.2s;
+  transition: all 0.2s ease;
+  /* AMÉLIORATIONS TACTILES */
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.color-btn:hover {
+  transform: scale(1.1);
 }
 
 .color-btn.active {
   border-color: white;
   transform: scale(1.2);
+  box-shadow: 0 0 6px rgba(255,255,255,0.7); /* Meilleur contraste */
 }
 
 #size-slider {
   width: 100px;
   accent-color: #6b5bff;
+  /* AMÉLIORATIONS TACTILES SLIDER */
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+  outline: none;
+}
+
+#size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #6b5bff;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+#size-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #6b5bff;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 /* Mini palette formes interface publique */
@@ -92,6 +211,36 @@ body {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.25);
   z-index: 999;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* RESPONSIVE SHAPES PALETTE */
+@media (max-width: 768px) {
+  .shapes-palette {
+    bottom: 70px; /* Ajusté selon la nouvelle position toolbar */
+    padding: 10px 8px;
+  }
+  
+  .shape-btn-mini {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .shapes-palette {
+    bottom: 60px;
+    gap: 6px;
+    padding: 8px 6px;
+  }
+  
+  .shape-btn-mini {
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 16px;
+  }
 }
 
 .shape-btn-mini {
@@ -106,15 +255,20 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .shape-btn-mini:hover {
   background-color: #666;
+  transform: scale(1.05);
 }
 
 .shape-btn-mini.active {
   background-color: #6b5bff;
+  box-shadow: 0 0 8px rgba(107, 91, 255, 0.5);
 }
 
 /* === STYLES INTERFACE ARTISTE === */
@@ -131,6 +285,8 @@ body {
   padding: 12px;
   z-index: 1000;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 .tool-group {
@@ -167,6 +323,9 @@ body {
   justify-content: center;
   margin: 2px;
   transition: all 0.2s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .artist-toolbar .tool-btn:hover,
@@ -195,6 +354,9 @@ body {
   border: 1px solid #333;
   cursor: pointer;
   transition: all 0.2s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .color-grid .color-btn:hover {
@@ -237,6 +399,8 @@ body {
   border-radius: 4px;
   font-size: 14px;
   z-index: 1000;
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 /* Responsive interface artiste */
@@ -245,6 +409,7 @@ body {
     width: 160px;
     left: 5px;
     top: 5px;
+    padding: 8px;
   }
   
   .artist-toolbar .tool-btn, 
@@ -252,12 +417,29 @@ body {
     width: 32px;
     height: 32px;
     font-size: 14px;
+    margin: 1px;
   }
   
   .color-grid .color-btn {
     width: 20px;
     height: 20px;
   }
+  
+  .tool-group h3 {
+    font-size: 10px;
+  }
+  
+  #zoom-indicator {
+    top: 5px;
+    right: 5px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+}
+
+/* Interface admin responsive */
+.admin-toolbar {
+  /* Hérite des styles de base .toolbar mais pour admin */
 }
 
 /* Curseurs personnalisés */
@@ -271,4 +453,66 @@ body {
 
 .shape-cursor {
   cursor: crosshair;
+}
+
+/* AMÉLIORATIONS ACCESSIBILITY & TOUCH */
+@media (hover: none) and (pointer: coarse) {
+  /* Spécifique aux appareils tactiles */
+  .tool-btn:hover,
+  .color-btn:hover,
+  .shape-btn-mini:hover,
+  .artist-toolbar .tool-btn:hover,
+  .shape-btn:hover,
+  .color-grid .color-btn:hover {
+    transform: none; /* Pas d'effet hover sur tactile */
+  }
+  
+  .tool-btn:active,
+  .color-btn:active,
+  .shape-btn-mini:active {
+    transform: scale(0.98); /* Effet press plus subtil */
+    background-color: #777;
+  }
+}
+
+/* FIXES SAFARI MOBILE */
+@supports (-webkit-touch-callout: none) {
+  .toolbar,
+  .shapes-palette,
+  .artist-toolbar {
+    -webkit-backdrop-filter: blur(10px);
+  }
+  
+  body {
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  
+  #canvas-container {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ORIENTATION LANDSCAPE MOBILE */
+@media (max-height: 500px) and (orientation: landscape) {
+  .toolbar {
+    bottom: 5px;
+    padding: 6px 8px;
+    gap: 8px;
+  }
+  
+  .tool-btn {
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 14px;
+  }
+  
+  .shapes-palette {
+    bottom: 50px;
+  }
+  
+  .artist-toolbar {
+    width: 140px;
+    padding: 8px 6px;
+  }
 }

@@ -35,12 +35,9 @@
     style="position:fixed; bottom:80px; right:10px; border:1px solid #555; background:#111; z-index:1000;">
   </canvas>
 
-  <!-- SCRIPTS DANS LE BON ORDRE - CRITIQUE POUR LE CHARGEMENT -->
+  <!-- SCRIPTS SIMPLIFIÉS - BRUSHMANAGER INTÉGRÉ DANS ADMIN.JS -->
   <script src="https://cdn.jsdelivr.net/npm/konva@9.2.0/konva.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
-  <!-- CHARGEMENT SYNCHRONE ET BLOQUANT DU BRUSHMANAGER -->
-  <script src="brushManager.js"></script>
-  <!-- PUIS CHARGEMENT DE L'APP -->
   <script src="admin.js"></script>
 </body>
 </html>
