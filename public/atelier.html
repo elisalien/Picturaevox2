@@ -5,10 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Atelier – Picturævox</title>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/konva@9.2.0/konva.min.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="brushManager.js"></script>
-  <script src="atelier.js" defer></script>
 </head>
 <body>
   <div id="canvas-container"></div>
@@ -87,5 +83,13 @@
 
   <!-- Indicateur zoom -->
   <div id="zoom-indicator">100%</div>
+
+  <!-- SCRIPTS DANS LE BON ORDRE - CRITIQUE POUR LE CHARGEMENT -->
+  <script src="https://cdn.jsdelivr.net/npm/konva@9.2.0/konva.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- CHARGEMENT SYNCHRONE ET BLOQUANT DU BRUSHMANAGER -->
+  <script src="brushManager.js"></script>
+  <!-- PUIS CHARGEMENT DE L'APP -->
+  <script src="atelier.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-// public/app.js - VERSION CORRIGÉE AVEC CHARGEMENT ROBUSTE
+// public/app.js - VERSION AVEC INITIALISATION SIMPLIFIÉE ET ROBUSTE
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -22,50 +22,28 @@ let isCreatingShape = false;
 let shapePreview = null;
 let shapeStartPos = null;
 
-// === CHARGEMENT ROBUSTE DU BRUSH MANAGER ===
+// === INITIALISATION SIMPLIFIÉE DU BRUSH MANAGER ===
 let brushManager = null;
-let brushManagerRetryCount = 0;
-const MAX_RETRY_COUNT = 10;
 
-// Fonction d'initialisation robuste
+// Fonction d'initialisation directe (BrushManager doit être déjà chargé)
 function initBrushManager() {
-  return new Promise((resolve, reject) => {
-    const attemptInit = () => {
-      if (typeof BrushManager !== 'undefined') {
-        try {
-          brushManager = new BrushManager('public', layer, socket);
-          console.log('✅ BrushManager initialized successfully for public interface');
-          resolve(brushManager);
-        } catch (error) {
-          console.error('❌ Error creating BrushManager:', error);
-          reject(error);
-        }
-      } else {
-        brushManagerRetryCount++;
-        if (brushManagerRetryCount < MAX_RETRY_COUNT) {
-          console.log(`⏳ BrushManager not ready, retry ${brushManagerRetryCount}/${MAX_RETRY_COUNT}...`);
-          setTimeout(attemptInit, 200);
-        } else {
-          console.error('❌ BrushManager failed to load after max retries');
-          reject(new Error('BrushManager unavailable'));
-        }
-      }
-    };
-    
-    attemptInit();
-  });
+  if (typeof BrushManager !== 'undefined') {
+    try {
+      brushManager = new BrushManager('public', layer, socket);
+      console.log('✅ BrushManager initialized successfully for public interface');
+      return true;
+    } catch (error) {
+      console.error('❌ Error creating BrushManager:', error);
+      return false;
+    }
+  } else {
+    console.error('❌ BrushManager class not found - check script loading order');
+    return false;
+  }
 }
 
-// Initialisation avec gestion d'erreur
-let brushManagerReady = false;
-initBrushManager()
-  .then(() => {
-    brushManagerReady = true;
-  })
-  .catch((error) => {
-    console.error('BrushManager initialization failed:', error);
-    brushManagerReady = false;
-  });
+// Initialisation immédiate (BrushManager doit être chargé avant ce script)
+const brushManagerReady = initBrushManager();
 
 // Fonction pour obtenir le BrushManager de façon sûre
 function getBrushManager() {
@@ -192,7 +170,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     return;
   }
 
-  // BRUSH ANIMÉS - Utilisation du BrushManager avec vérification robuste
+  // BRUSH ANIMÉS - Utilisation du BrushManager avec vérification
   if (['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
     isDrawing = true;
     currentId = generateId();
@@ -201,7 +179,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     if (manager) {
       manager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     } else {
-      console.warn('🔶 BrushManager not ready, using fallback for', currentTool);
+      console.warn('🔶 BrushManager not available, using fallback for', currentTool);
       createSimpleFallbackEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     }
     return;
@@ -406,7 +384,9 @@ socket.on('brushEffect', (data) => {
   if (manager) {
     manager.createNetworkEffect(data);
   } else {
-    console.warn('🔶 BrushManager not ready for network effect, skipping');
+    console.warn('🔶 BrushManager not available for network effect, using fallback');
+    // Fallback pour les effets réseau
+    createSimpleFallbackEffect(data.x, data.y, data.color, data.size);
   }
 });
 
@@ -530,3 +510,4 @@ socket.on('shapeCreate', data => {
 });
 
 console.log('✅ App.js loaded for public interface');
+console.log('🎯 BrushManager status:', brushManagerReady ? 'Ready' : 'Not available');

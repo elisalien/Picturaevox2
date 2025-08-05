@@ -1,4 +1,4 @@
-// public/admin.js - VERSION CORRIGÉE AVEC OPTIMISATION ZONE VISIBLE
+// public/admin.js - VERSION AVEC INITIALISATION SIMPLIFIÉE ET ROBUSTE
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -11,50 +11,28 @@ stage.add(layer);
 // Rendre stage disponible globalement pour BrushManager
 window.stage = stage;
 
-// === CHARGEMENT ROBUSTE DU BRUSH MANAGER (ADMIN = SPECTATEUR HAUTE QUALITÉ) ===
+// === INITIALISATION SIMPLIFIÉE DU BRUSH MANAGER (ADMIN = SPECTATEUR HAUTE QUALITÉ) ===
 let brushManager = null;
-let brushManagerRetryCount = 0;
-const MAX_RETRY_COUNT = 10;
 
-// Fonction d'initialisation robuste
+// Fonction d'initialisation directe (BrushManager doit être déjà chargé)
 function initBrushManager() {
-  return new Promise((resolve, reject) => {
-    const attemptInit = () => {
-      if (typeof BrushManager !== 'undefined') {
-        try {
-          brushManager = new BrushManager('admin', layer, null); // null car admin ne dessine pas
-          console.log('✅ BrushManager initialized successfully for admin interface (high quality + viewport optimization)');
-          resolve(brushManager);
-        } catch (error) {
-          console.error('❌ Error creating BrushManager:', error);
-          reject(error);
-        }
-      } else {
-        brushManagerRetryCount++;
-        if (brushManagerRetryCount < MAX_RETRY_COUNT) {
-          console.log(`⏳ BrushManager not ready, retry ${brushManagerRetryCount}/${MAX_RETRY_COUNT}...`);
-          setTimeout(attemptInit, 200);
-        } else {
-          console.error('❌ BrushManager failed to load after max retries');
-          reject(new Error('BrushManager unavailable'));
-        }
-      }
-    };
-    
-    attemptInit();
-  });
+  if (typeof BrushManager !== 'undefined') {
+    try {
+      brushManager = new BrushManager('admin', layer, null); // null car admin ne dessine pas
+      console.log('✅ BrushManager initialized successfully for admin interface (high quality + viewport optimization)');
+      return true;
+    } catch (error) {
+      console.error('❌ Error creating BrushManager:', error);
+      return false;
+    }
+  } else {
+    console.error('❌ BrushManager class not found - check script loading order');
+    return false;
+  }
 }
 
-// Initialisation avec gestion d'erreur
-let brushManagerReady = false;
-initBrushManager()
-  .then(() => {
-    brushManagerReady = true;
-  })
-  .catch((error) => {
-    console.error('BrushManager initialization failed:', error);
-    brushManagerReady = false;
-  });
+// Initialisation immédiate (BrushManager doit être chargé avant ce script)
+const brushManagerReady = initBrushManager();
 
 // Fonction pour obtenir le BrushManager de façon sûre
 function getBrushManager() {
@@ -130,7 +108,7 @@ socket.on('brushEffect', (data) => {
   if (manager) {
     manager.createNetworkEffect(data);
   } else {
-    console.warn('🔶 BrushManager not ready for network effect, skipping');
+    console.warn('🔶 BrushManager not available for network effect, skipping');
   }
 });
 
@@ -487,4 +465,5 @@ stage.on('wheel', (e) => {
 });
 
 console.log('✅ Admin.js loaded for chantilly interface with viewport optimization');
-console.log('🎯 High quality brush effects enabled with zone visible optimization');
+console.log('🎯 BrushManager status:', brushManagerReady ? 'Ready (High quality + viewport optimization)' : 'Not available');
+console.log('📍 Viewport optimization enabled for performance');
