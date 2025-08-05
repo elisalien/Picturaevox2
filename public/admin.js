@@ -959,6 +959,7 @@ class BrushManager {
           petals: { count: 3, duration: 2500, permanentOpacity: 0.07, fadeStartTime: 15 }
         }
       },
+      
       admin: {
         quality: 'high',
         maxPermanent: 300,
