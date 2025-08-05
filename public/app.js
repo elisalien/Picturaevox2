@@ -1,4 +1,4 @@
-// public/app.js
+// public/app.js - VERSION SIMPLIFIÉE AVEC BRUSH MANAGER
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -18,331 +18,10 @@ let isCreatingShape = false;
 let shapePreview = null;
 let shapeStartPos = null;
 
-// === SYSTÈME BRUSH ANIMÉS OPTIMISÉ POUR INTERFACE PUBLIQUE ===
+// === INITIALISER LE BRUSH MANAGER ===
+const brushManager = new BrushManager('public', layer, socket);
 
-// Configuration optimisée pour l'interface publique (performances prioritaires)
-const PublicBrushConfig = {
-  sparkles: { particles: 3, duration: 1000 },
-  watercolor: { drops: 2, duration: 1200 },
-  electric: { bolts: 2, segments: 4, duration: 1000 },
-  petals: { count: 2, duration: 2000 },
-  neon: { particles: 3, duration: 1200 },
-  fire: { flames: 3, duration: 1000 }
-};
-
-// Gestionnaire d'effets pour interface publique (version allégée)
-class PublicBrushManager {
-  constructor() {
-    this.activeEffects = new Map();
-    this.lastEmit = 0;
-    this.effectCount = 0;
-    this.maxEffects = 20; // Limite pour interface publique
-    
-    // Nettoyage automatique toutes les 20 secondes
-    setInterval(() => this.cleanup(), 20000);
-  }
-
-  // Créer effet local avec émission réseau
-  createAndEmitEffect(type, x, y, color, size) {
-    // Throttling agressif pour interface publique (400ms)
-    const now = Date.now();
-    if (now - this.lastEmit < 400) return;
-    
-    // Créer l'effet local
-    this.createLocalEffect(type, x, y, color, size);
-    
-    // Émettre vers le réseau
-    socket.emit('brushEffect', {
-      type,
-      x,
-      y,
-      color,
-      size,
-      interface: 'public',
-      timestamp: now
-    });
-    
-    this.lastEmit = now;
-  }
-
-  // Créer effet reçu du réseau
-  createNetworkEffect(data) {
-    this.createLocalEffect(data.type, data.x, data.y, data.color, data.size);
-  }
-
-  // Créer effet local (simplifié pour performances)
-  createLocalEffect(type, x, y, color, size) {
-    if (this.effectCount >= this.maxEffects) return;
-    
-    const effectId = 'effect_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-    
-    switch(type) {
-      case 'sparkles':
-        this.createSparkles(x, y, color, size, effectId);
-        break;
-      case 'watercolor':
-        this.createWatercolor(x, y, color, size, effectId);
-        break;
-      case 'electric':
-        this.createElectric(x, y, color, size, effectId);
-        break;
-      case 'petals':
-        this.createPetals(x, y, color, size, effectId);
-        break;
-      case 'neon':
-        this.createNeon(x, y, color, size, effectId);
-        break;
-      case 'fire':
-        this.createFire(x, y, color, size, effectId);
-        break;
-    }
-  }
-
-  // Effets simplifiés pour interface publique
-  createSparkles(x, y, color, size, effectId) {
-    const config = PublicBrushConfig.sparkles;
-    const elements = [];
-    
-    for (let i = 0; i < config.particles; i++) {
-      const sparkle = new Konva.Star({
-        x: x + (Math.random() - 0.5) * size,
-        y: y + (Math.random() - 0.5) * size,
-        numPoints: 4,
-        innerRadius: 0.5,
-        outerRadius: 1.5,
-        fill: color,
-        opacity: 0.8,
-        effectId: effectId
-      });
-      
-      layer.add(sparkle);
-      elements.push(sparkle);
-      
-      // Animation minimaliste
-      setTimeout(() => {
-        sparkle.to({
-          scaleX: 0,
-          scaleY: 0,
-          opacity: 0,
-          duration: 0.5,
-          onFinish: () => sparkle.destroy()
-        });
-      }, Math.random() * 500);
-    }
-    
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createNeon(x, y, color, size, effectId) {
-    const config = PublicBrushConfig.neon;
-    const elements = [];
-    
-    for (let i = 0; i < config.particles; i++) {
-      const particle = new Konva.Circle({
-        x: x + (Math.random() - 0.5) * size,
-        y: y + (Math.random() - 0.5) * size,
-        radius: 1 + Math.random(),
-        fill: color,
-        opacity: 0.7,
-        effectId: effectId
-      });
-      
-      layer.add(particle);
-      elements.push(particle);
-      
-      // Animation glow simplifiée
-      particle.to({
-        radius: 3,
-        opacity: 0,
-        duration: 0.8,
-        onFinish: () => particle.destroy()
-      });
-    }
-    
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createFire(x, y, color, size, effectId) {
-    const config = PublicBrushConfig.fire;
-    const elements = [];
-    
-    for (let i = 0; i < config.flames; i++) {
-      const flame = new Konva.Ellipse({
-        x: x + (Math.random() - 0.5) * size * 0.5,
-        y: y + (Math.random() - 0.5) * size * 0.5,
-        radiusX: 2,
-        radiusY: 4,
-        fill: color,
-        opacity: 0.6,
-        effectId: effectId
-      });
-      
-      layer.add(flame);
-      elements.push(flame);
-      
-      // Animation flamme simple
-      flame.to({
-        y: flame.y() - size,
-        scaleY: 0.1,
-        opacity: 0,
-        duration: 0.6,
-        onFinish: () => flame.destroy()
-      });
-    }
-    
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createWatercolor(x, y, color, size, effectId) {
-    const config = PublicBrushConfig.watercolor;
-    const elements = [];
-    
-    for (let i = 0; i < config.drops; i++) {
-      const drop = new Konva.Circle({
-        x: x + (Math.random() - 0.5) * size,
-        y: y + (Math.random() - 0.5) * size,
-        radius: size * 0.3,
-        fill: color,
-        opacity: 0.2,
-        effectId: effectId
-      });
-      
-      layer.add(drop);
-      elements.push(drop);
-      
-      // Diffusion simple
-      drop.to({
-        radius: size * 0.8,
-        opacity: 0,
-        duration: 1,
-        onFinish: () => drop.destroy()
-      });
-    }
-    
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createElectric(x, y, color, size, effectId) {
-    const config = PublicBrushConfig.electric;
-    const elements = [];
-    
-    for (let i = 0; i < config.bolts; i++) {
-      const points = [x, y];
-      for (let j = 0; j < config.segments; j++) {
-        points.push(
-          points[points.length - 2] + (Math.random() - 0.5) * size * 0.5,
-          points[points.length - 1] + (Math.random() - 0.5) * size * 0.5
-        );
-      }
-      
-      const bolt = new Konva.Line({
-        points: points,
-        stroke: color,
-        strokeWidth: 1,
-        opacity: 0.8,
-        effectId: effectId
-      });
-      
-      layer.add(bolt);
-      elements.push(bolt);
-      
-      // Scintillement simple
-      setTimeout(() => {
-        bolt.to({
-          opacity: 0,
-          duration: 0.3,
-          onFinish: () => bolt.destroy()
-        });
-      }, Math.random() * 300);
-    }
-    
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createPetals(x, y, color, size, effectId) {
-    const config = PublicBrushConfig.petals;
-    const elements = [];
-    
-    for (let i = 0; i < config.count; i++) {
-      const petal = new Konva.Ellipse({
-        x: x + (Math.random() - 0.5) * size,
-        y: y + (Math.random() - 0.5) * size,
-        radiusX: size * 0.2,
-        radiusY: size * 0.1,
-        fill: color,
-        opacity: 0.6,
-        rotation: Math.random() * 360,
-        effectId: effectId
-      });
-      
-      layer.add(petal);
-      elements.push(petal);
-      
-      // Chute simple
-      petal.to({
-        y: petal.y() + size * 2,
-        rotation: petal.rotation() + 180,
-        opacity: 0,
-        duration: 1.5,
-        onFinish: () => petal.destroy()
-      });
-    }
-    
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  trackEffect(effectId, elements, duration) {
-    this.activeEffects.set(effectId, {
-      elements,
-      timestamp: Date.now(),
-      duration
-    });
-    this.effectCount++;
-    
-    // Auto-cleanup
-    setTimeout(() => {
-      this.removeEffect(effectId);
-    }, duration + 500);
-    
-    layer.batchDraw();
-  }
-
-  removeEffect(effectId) {
-    const effect = this.activeEffects.get(effectId);
-    if (effect) {
-      effect.elements.forEach(el => {
-        if (!el.isDestroyed()) el.destroy();
-      });
-      this.activeEffects.delete(effectId);
-      this.effectCount = Math.max(0, this.effectCount - 1);
-    }
-  }
-
-  cleanup() {
-    const now = Date.now();
-    const expired = [];
-    
-    this.activeEffects.forEach((effect, effectId) => {
-      if (now - effect.timestamp > effect.duration + 2000) {
-        expired.push(effectId);
-      }
-    });
-    
-    expired.forEach(id => this.removeEffect(id));
-    layer.batchDraw();
-    
-    if (expired.length > 0) {
-      console.log(`Public interface: cleaned ${expired.length} expired effects`);
-    }
-  }
-}
-
-// Initialiser le gestionnaire d'effets
-const brushManager = new PublicBrushManager();
-
-// === FIN SYSTÈME BRUSH ANIMÉS ===
-
-// Throttle helper
+// === UTILITAIRES ===
 function throttle(func, wait) {
   let lastTime = 0;
   return function(...args) {
@@ -358,7 +37,6 @@ function generateId() {
   return 'shape_' + Date.now() + '_' + Math.round(Math.random() * 10000);
 }
 
-// Fonction pour obtenir la pression
 function getPressure(evt) {
   if (evt.originalEvent && evt.originalEvent.pressure !== undefined) {
     return Math.max(0.1, evt.originalEvent.pressure);
@@ -376,10 +54,11 @@ const emitDrawingThrottled = throttle((data) => {
   socket.emit('drawing', data);
 }, 50);
 
-// Throttling pour texture (réseau réduit)
 const emitTextureThrottled = throttle((data) => {
   socket.emit('texture', data);
 }, 150);
+
+// === INTERFACE UTILISATEUR ===
 
 // Tool buttons
 document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -390,7 +69,6 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
     const cursor = currentTool === 'pan' ? 'grab' : 'crosshair';
     stage.container().style.cursor = cursor;
     
-    // Gestion du bouton formes
     const shapesPanel = document.getElementById('shapes-palette');
     if (currentTool === 'shapes') {
       shapesPanel.style.display = 'flex';
@@ -431,24 +109,8 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Initialize existing shapes on load
-socket.on('initShapes', shapes => {
-  shapes.forEach(data => {
-    const line = new Konva.Line({
-      id: data.id,
-      points: data.points,
-      stroke: data.stroke,
-      strokeWidth: data.strokeWidth,
-      globalCompositeOperation: data.globalCompositeOperation,
-      lineCap: 'round',
-      lineJoin: 'round'
-    });
-    layer.add(line);
-  });
-  layer.draw();
-});
+// === ÉVÉNEMENTS DE DESSIN ===
 
-// Drawing and pan handlers
 stage.on('mousedown touchstart pointerdown', (evt) => {
   const pointer = stage.getPointerPosition();
   if (currentTool === 'pan') {
@@ -478,7 +140,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     return;
   }
 
-  // Nouveaux brush animés synchronisés
+  // BRUSH ANIMÉS - Utilisation du BrushManager
   if (['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
     isDrawing = true;
     currentId = generateId();
@@ -542,7 +204,7 @@ stage.on('mousemove touchmove pointermove', (evt) => {
     return;
   }
 
-  // Nouveaux brush animés (continuer l'effet)
+  // BRUSH ANIMÉS - Continuer l'effet avec BrushManager
   if (['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
     brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
@@ -589,6 +251,7 @@ stage.on('mouseup touchend pointerup', () => {
   if (!isDrawing) return;
   isDrawing = false;
   
+  // Les brush animés et texture n'ont pas besoin d'événement final
   if (currentTool === 'texture' || ['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
     return;
   }
@@ -602,7 +265,7 @@ stage.on('mouseup touchend pointerup', () => {
   });
 });
 
-// Fonction pour créer l'effet texture localement
+// === EFFET TEXTURE (ancien système) ===
 function createTextureEffect(x, y, color, size) {
   for (let i = 0; i < 5; i++) {
     const offsetX = (Math.random() - 0.5) * 10;
@@ -626,22 +289,33 @@ function createTextureEffect(x, y, color, size) {
   layer.batchDraw();
 }
 
-// === ÉCOUTEURS SOCKET POUR EFFETS RÉSEAU ===
+// === SOCKET LISTENERS ===
 
-// Écouter les brush effects des autres utilisateurs
+// Initialize existing shapes on load
+socket.on('initShapes', shapes => {
+  shapes.forEach(data => {
+    const line = new Konva.Line({
+      id: data.id,
+      points: data.points,
+      stroke: data.stroke,
+      strokeWidth: data.strokeWidth,
+      globalCompositeOperation: data.globalCompositeOperation,
+      lineCap: 'round',
+      lineJoin: 'round'
+    });
+    layer.add(line);
+  });
+  layer.draw();
+});
+
+// Écouter les brush effects des autres utilisateurs - UTILISE LE BRUSH MANAGER
 socket.on('brushEffect', (data) => {
-  // Créer l'effet reçu du réseau
   brushManager.createNetworkEffect(data);
 });
 
-// Nettoyage des effets d'un utilisateur déconnecté
+// Nettoyage des effets d'un utilisateur déconnecté - UTILISE LE BRUSH MANAGER
 socket.on('cleanupUserEffects', (data) => {
-  // Nettoyer les effets de cet utilisateur spécifique
-  brushManager.activeEffects.forEach((effect, effectId) => {
-    if (effect.socketId === data.socketId) {
-      brushManager.removeEffect(effectId);
-    }
-  });
+  brushManager.cleanupUserEffects(data.socketId);
 });
 
 // Socket listeners existants
@@ -664,7 +338,6 @@ socket.on('drawing', data => {
   layer.batchDraw();
 });
 
-// Écouter les événements texture des autres utilisateurs
 socket.on('texture', data => {
   createTextureEffect(data.x, data.y, data.color, data.size);
 });
@@ -701,11 +374,16 @@ socket.on('deleteShape', ({ id }) => {
 
 socket.on('clearCanvas', () => {
   layer.destroyChildren();
+  // UTILISE LE BRUSH MANAGER pour nettoyer les traces permanentes
+  brushManager.clearPermanentTraces();
   layer.draw();
 });
 
 socket.on('restoreShapes', (shapes) => {
   layer.destroyChildren();
+  // UTILISE LE BRUSH MANAGER pour nettoyer les traces permanentes
+  brushManager.clearPermanentTraces();
+  
   shapes.forEach(data => {
     const line = new Konva.Line({
       id: data.id,
