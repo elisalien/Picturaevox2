@@ -1,4 +1,4 @@
-// public/app.js - VERSION CORRIGÉE POUR SYNCHRONISATION
+// public/app.js - VERSION CORRIGÉE BRUSHMANAGER
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -19,18 +19,41 @@ let isCreatingShape = false;
 let shapePreview = null;
 let shapeStartPos = null;
 
-// === INITIALISER LE BRUSH MANAGER APRÈS CHARGEMENT ===
+// === INITIALISER LE BRUSH MANAGER DE FAÇON ROBUSTE ===
 let brushManager;
 
-// Attendre que BrushManager soit disponible
-document.addEventListener('DOMContentLoaded', () => {
+// Fonction pour initialiser le BrushManager
+function initBrushManager() {
   if (typeof BrushManager !== 'undefined') {
     brushManager = new BrushManager('public', layer, socket);
     console.log('BrushManager initialized for public');
-  } else {
-    console.error('BrushManager not loaded');
+    return true;
   }
-});
+  return false;
+}
+
+// Essayer d'initialiser immédiatement
+if (!initBrushManager()) {
+  // Si pas disponible, attendre le chargement du DOM
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!initBrushManager()) {
+      // Si toujours pas disponible, attendre un peu plus
+      setTimeout(() => {
+        if (!initBrushManager()) {
+          console.error('BrushManager could not be loaded');
+        }
+      }, 100);
+    }
+  });
+}
+
+// Fonction pour obtenir le BrushManager de façon sûre
+function getBrushManager() {
+  if (!brushManager && typeof BrushManager !== 'undefined') {
+    initBrushManager();
+  }
+  return brushManager;
+}
 
 // === UTILITAIRES ===
 function throttle(func, wait) {
@@ -79,6 +102,7 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
     btn.classList.add('active');
     currentTool = btn.id;
     console.log('Current tool set to:', currentTool); // Debug
+    console.log('BrushManager available:', !!getBrushManager()); // Debug
     const cursor = currentTool === 'pan' ? 'grab' : 'crosshair';
     stage.container().style.cursor = cursor;
     
@@ -158,15 +182,20 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     return;
   }
 
-  // BRUSH ANIMÉS - Utilisation du BrushManager
+  // BRUSH ANIMÉS - Utilisation du BrushManager avec vérification
   if (['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
     console.log('Using brush manager for:', currentTool); // Debug
     isDrawing = true;
     currentId = generateId();
-    if (brushManager) {
-      brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
+    
+    const manager = getBrushManager();
+    if (manager) {
+      console.log('BrushManager found, creating effect'); // Debug
+      manager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     } else {
-      console.error('BrushManager not available');
+      console.error('BrushManager not available for', currentTool);
+      // Fallback : créer un effet simple
+      createSimpleFallbackEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     }
     return;
   }
@@ -231,8 +260,12 @@ stage.on('mousemove touchmove pointermove', (evt) => {
 
   // BRUSH ANIMÉS - Continuer l'effet avec BrushManager
   if (['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
-    if (brushManager) {
-      brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
+    const manager = getBrushManager();
+    if (manager) {
+      manager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
+    } else {
+      // Fallback
+      createSimpleFallbackEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     }
     return;
   }
@@ -319,6 +352,32 @@ function createTextureEffect(x, y, color, size) {
   layer.batchDraw();
 }
 
+// === FALLBACK SIMPLE POUR LES BRUSH ANIMÉS ===
+function createSimpleFallbackEffect(x, y, color, size) {
+  console.log('Using fallback effect for brush'); // Debug
+  // Créer un effet simple visible pour vérifier que ça marche
+  const circle = new Konva.Circle({
+    x: x,
+    y: y,
+    radius: size,
+    fill: color,
+    opacity: 0.6
+  });
+  layer.add(circle);
+  
+  // Animation simple de disparition
+  circle.to({
+    radius: size * 2,
+    opacity: 0,
+    duration: 1,
+    onFinish: () => {
+      circle.destroy();
+    }
+  });
+  
+  layer.batchDraw();
+}
+
 // === SOCKET LISTENERS ===
 
 // Initialize existing shapes on load
@@ -338,17 +397,21 @@ socket.on('initShapes', shapes => {
   layer.draw();
 });
 
-// Écouter les brush effects des autres utilisateurs - UTILISE LE BRUSH MANAGER
+// Écouter les brush effects des autres utilisateurs
 socket.on('brushEffect', (data) => {
-  if (brushManager) {
-    brushManager.createNetworkEffect(data);
+  const manager = getBrushManager();
+  if (manager) {
+    manager.createNetworkEffect(data);
+  } else {
+    console.warn('BrushManager not available for network effect');
   }
 });
 
-// Nettoyage des effets d'un utilisateur déconnecté - UTILISE LE BRUSH MANAGER
+// Nettoyage des effets d'un utilisateur déconnecté
 socket.on('cleanupUserEffects', (data) => {
-  if (brushManager) {
-    brushManager.cleanupUserEffects(data.socketId);
+  const manager = getBrushManager();
+  if (manager) {
+    manager.cleanupUserEffects(data.socketId);
   }
 });
 
@@ -408,18 +471,20 @@ socket.on('deleteShape', ({ id }) => {
 
 socket.on('clearCanvas', () => {
   layer.destroyChildren();
-  // UTILISE LE BRUSH MANAGER pour nettoyer les traces permanentes
-  if (brushManager) {
-    brushManager.clearPermanentTraces();
+  // Utiliser le BrushManager pour nettoyer les traces permanentes si disponible
+  const manager = getBrushManager();
+  if (manager) {
+    manager.clearPermanentTraces();
   }
   layer.draw();
 });
 
 socket.on('restoreShapes', (shapes) => {
   layer.destroyChildren();
-  // UTILISE LE BRUSH MANAGER pour nettoyer les traces permanentes
-  if (brushManager) {
-    brushManager.clearPermanentTraces();
+  // Utiliser le BrushManager pour nettoyer les traces permanentes si disponible
+  const manager = getBrushManager();
+  if (manager) {
+    manager.clearPermanentTraces();
   }
   
   shapes.forEach(data => {
@@ -463,4 +528,4 @@ socket.on('shapeCreate', data => {
 
 // Debug - Vérifier que tout est chargé
 console.log('App.js loaded, current tool:', currentTool);
-console.log('BrushManager available:', typeof BrushManager !== 'undefined');
+console.log('BrushManager available at startup:', typeof BrushManager !== 'undefined');
