@@ -1,4 +1,4 @@
-// public/admin.js - VERSION SIMPLIFIÉE AVEC BRUSH MANAGER
+// public/admin.js - VERSION CORRIGÉE
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -9,7 +9,17 @@ const layer = new Konva.Layer();
 stage.add(layer);
 
 // === INITIALISER LE BRUSH MANAGER (ADMIN = SPECTATEUR HAUTE QUALITÉ) ===
-const brushManager = new BrushManager('admin', layer, null); // null car admin ne dessine pas
+let brushManager;
+
+// Attendre que BrushManager soit disponible
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof BrushManager !== 'undefined') {
+    brushManager = new BrushManager('admin', layer, null); // null car admin ne dessine pas
+    console.log('BrushManager initialized for admin');
+  } else {
+    console.error('BrushManager not available on admin');
+  }
+});
 
 // === SOCKET LISTENERS POUR RÉCEPTION D'EFFETS ===
 
@@ -76,7 +86,9 @@ function createTextureEffect(x, y, color, size) {
 
 // BRUSH EFFECTS - Utilise le BrushManager haute qualité
 socket.on('brushEffect', (data) => {
-  brushManager.createNetworkEffect(data);
+  if (brushManager) {
+    brushManager.createNetworkEffect(data);
+  }
 });
 
 socket.on('texture', data => {
@@ -84,7 +96,9 @@ socket.on('texture', data => {
 });
 
 socket.on('cleanupUserEffects', (data) => {
-  brushManager.cleanupUserEffects(data.socketId);
+  if (brushManager) {
+    brushManager.cleanupUserEffects(data.socketId);
+  }
 });
 
 socket.on('draw', data => {
@@ -120,14 +134,18 @@ socket.on('deleteShape', ({ id }) => {
 socket.on('clearCanvas', () => {
   layer.destroyChildren();
   // UTILISE LE BRUSH MANAGER pour nettoyer les traces permanentes
-  brushManager.clearPermanentTraces();
+  if (brushManager) {
+    brushManager.clearPermanentTraces();
+  }
   layer.draw();
 });
 
 socket.on('restoreShapes', (shapes) => {
   layer.destroyChildren();
   // UTILISE LE BRUSH MANAGER pour nettoyer les traces permanentes
-  brushManager.clearPermanentTraces();
+  if (brushManager) {
+    brushManager.clearPermanentTraces();
+  }
   
   shapes.forEach(data => {
     const line = new Konva.Line({
@@ -325,7 +343,9 @@ stage.on('mouseout', evt => {
 clearBtn.addEventListener('click', () => {
   setActiveButton(clearBtn);
   layer.destroyChildren();
-  brushManager.clearPermanentTraces();
+  if (brushManager) {
+    brushManager.clearPermanentTraces();
+  }
   layer.draw();
   socket.emit('clearCanvas');
 });
@@ -356,3 +376,7 @@ hideUIBtn.style.border = '1px solid #666';
 hideUIBtn.style.borderRadius = '50%';
 hideUIBtn.style.width = '40px';
 hideUIBtn.style.height = '40px';
+
+// Debug
+console.log('Admin.js loaded');
+console.log('BrushManager available:', typeof BrushManager !== 'undefined');

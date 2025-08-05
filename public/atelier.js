@@ -1,4 +1,4 @@
-// public/atelier.js - VERSION SIMPLIFIÉE AVEC BRUSH MANAGER
+// public/atelier.js - VERSION CORRIGÉE
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -20,8 +20,19 @@ let isCreatingShape = false;
 let shapePreview = null;
 let shapeStartPos = null;
 
-// === INITIALISER LE BRUSH MANAGER (ATELIER = QUALITÉ ÉLEVÉE) ===
-const brushManager = new BrushManager('atelier', layer, socket);
+// === INITIALISER LE BRUSH MANAGER APRÈS CHARGEMENT DE LA PAGE ===
+let brushManager;
+
+// Attendre que le DOM et BrushManager soient chargés
+document.addEventListener('DOMContentLoaded', () => {
+  // Vérifier que BrushManager est disponible
+  if (typeof BrushManager !== 'undefined') {
+    brushManager = new BrushManager('atelier', layer, socket);
+    console.log('BrushManager initialized for atelier');
+  } else {
+    console.error('BrushManager not available on atelier');
+  }
+});
 
 // === UTILITAIRES ===
 function throttle(func, wait) {
@@ -50,6 +61,22 @@ function getPressureSize(pressure) {
   const minSize = Math.max(1, currentSize * 0.3);
   const maxSize = currentSize * 1.5;
   return minSize + (maxSize - minSize) * pressure;
+}
+
+// Correction : coordonnées sans transformation par le zoom pour les événements réseau
+function getScenePos(pointer) {
+  return {
+    x: pointer.x,
+    y: pointer.y
+  };
+}
+
+// Coordonnées pour le dessin local (avec transformation zoom)
+function getLocalScenePos(pointer) {
+  return {
+    x: (pointer.x - stage.x()) / stage.scaleX(),
+    y: (pointer.y - stage.y()) / stage.scaleY()
+  };
 }
 
 const emitDrawingThrottled = throttle((data) => {
@@ -81,12 +108,17 @@ function createTextureEffect(x, y, color, size) {
 
 // === INTERFACE UTILISATEUR ===
 
-// Gestion des outils
+// Gestion des outils - CORRECTION : Sélection qui fonctionne
 document.querySelectorAll('.tool-btn, .shape-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    console.log('Tool clicked:', btn.id); // Debug
+    // Retirer la classe active de tous les boutons
     document.querySelectorAll('.tool-btn, .shape-btn').forEach(b => b.classList.remove('active'));
+    // Ajouter la classe active au bouton cliqué
     btn.classList.add('active');
+    // Changer l'outil
     currentTool = btn.id;
+    console.log('Current tool set to:', currentTool); // Debug
     updateCursor();
   });
 });
@@ -233,37 +265,40 @@ function createLine(startPos, endPos) {
 // === ÉVÉNEMENTS DE DESSIN ===
 
 stage.on('mousedown touchstart pointerdown', (evt) => {
+  console.log('Mouse down, current tool:', currentTool); // Debug
+  
   const pointer = stage.getPointerPosition();
-  const scenePos = {
-    x: (pointer.x - stage.x()) / stage.scaleX(),
-    y: (pointer.y - stage.y()) / stage.scaleY()
-  };
-
+  
   if (currentTool === 'pan') {
     lastPanPos = pointer;
     return;
   }
 
   if (currentTool === 'eyedropper') {
-    pickColor(scenePos.x, scenePos.y);
+    const localPos = getLocalScenePos(pointer);
+    pickColor(localPos.x, localPos.y);
     return;
   }
 
   // Formes prédéfinies
   if (currentTool.startsWith('shape-')) {
     isCreatingShape = true;
-    shapeStartPos = scenePos;
+    shapeStartPos = getLocalScenePos(pointer);
     return;
   }
 
   const pressure = getPressure(evt);
   const pressureSize = getPressureSize(pressure);
 
+  // CORRECTION : Coordonnées réseau vs locales
+  const networkPos = getScenePos(pointer); // Pour le réseau (sans zoom)
+  const localPos = getLocalScenePos(pointer); // Pour le dessin local (avec zoom)
+
   if (currentTool === 'texture') {
     isDrawing = true;
     currentId = generateId();
-    emitTextureThrottled({ x: scenePos.x, y: scenePos.y, color: currentColor, size: pressureSize });
-    createTextureEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
+    emitTextureThrottled({ x: networkPos.x, y: networkPos.y, color: currentColor, size: pressureSize });
+    createTextureEffect(localPos.x, localPos.y, currentColor, pressureSize);
     return;
   }
 
@@ -271,7 +306,11 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   if (['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
     isDrawing = true;
     currentId = generateId();
-    brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
+    if (brushManager) {
+      brushManager.createAndEmitEffect(currentTool, networkPos.x, networkPos.y, currentColor, pressureSize);
+    } else {
+      console.warn('BrushManager not available for', currentTool);
+    }
     return;
   }
 
@@ -280,7 +319,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   currentId = generateId();
   lastLine = new Konva.Line({
     id: currentId,
-    points: [scenePos.x, scenePos.y],
+    points: [localPos.x, localPos.y],
     stroke: currentColor,
     strokeWidth: pressureSize,
     globalCompositeOperation: currentTool === 'eraser' ? 'destination-out' : 'source-over',
@@ -292,10 +331,6 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
 
 stage.on('mousemove touchmove pointermove', (evt) => {
   const pointer = stage.getPointerPosition();
-  const scenePos = {
-    x: (pointer.x - stage.x()) / stage.scaleX(),
-    y: (pointer.y - stage.y()) / stage.scaleY()
-  };
 
   // Pan
   if (currentTool === 'pan' && lastPanPos) {
@@ -312,15 +347,17 @@ stage.on('mousemove touchmove pointermove', (evt) => {
   if (isCreatingShape && shapeStartPos) {
     if (shapePreview) shapePreview.destroy();
 
+    const localPos = getLocalScenePos(pointer);
+
     switch(currentTool) {
       case 'shape-circle':
-        shapePreview = createCircle(shapeStartPos, scenePos);
+        shapePreview = createCircle(shapeStartPos, localPos);
         break;
       case 'shape-rectangle':
-        shapePreview = createRectangle(shapeStartPos, scenePos);
+        shapePreview = createRectangle(shapeStartPos, localPos);
         break;
       case 'shape-line':
-        shapePreview = createLine(shapeStartPos, scenePos);
+        shapePreview = createLine(shapeStartPos, localPos);
         break;
     }
 
@@ -336,31 +373,40 @@ stage.on('mousemove touchmove pointermove', (evt) => {
 
   const pressure = getPressure(evt);
   const pressureSize = getPressureSize(pressure);
+  
+  // CORRECTION : Coordonnées réseau vs locales
+  const networkPos = getScenePos(pointer);
+  const localPos = getLocalScenePos(pointer);
 
   if (currentTool === 'texture') {
-    emitTextureThrottled({ x: scenePos.x, y: scenePos.y, color: currentColor, size: pressureSize });
-    createTextureEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
+    emitTextureThrottled({ x: networkPos.x, y: networkPos.y, color: currentColor, size: pressureSize });
+    createTextureEffect(localPos.x, localPos.y, currentColor, pressureSize);
     return;
   }
 
   // BRUSH ANIMÉS - Continuer l'effet
   if (['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
-    brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
+    if (brushManager) {
+      brushManager.createAndEmitEffect(currentTool, networkPos.x, networkPos.y, currentColor, pressureSize);
+    }
     return;
   }
 
   // Dessin normal
-  lastLine.points(lastLine.points().concat([scenePos.x, scenePos.y]));
-  lastLine.strokeWidth(pressureSize);
-  layer.batchDraw();
+  if (lastLine) {
+    lastLine.points(lastLine.points().concat([localPos.x, localPos.y]));
+    lastLine.strokeWidth(pressureSize);
+    layer.batchDraw();
 
-  emitDrawingThrottled({
-    id: currentId,
-    points: lastLine.points(),
-    stroke: lastLine.stroke(),
-    strokeWidth: lastLine.strokeWidth(),
-    globalCompositeOperation: lastLine.globalCompositeOperation()
-  });
+    // CORRECTION : Utiliser les coordonnées réseau pour l'émission
+    emitDrawingThrottled({
+      id: currentId,
+      points: lastLine.points(),
+      stroke: lastLine.stroke(),
+      strokeWidth: lastLine.strokeWidth(),
+      globalCompositeOperation: lastLine.globalCompositeOperation()
+    });
+  }
 });
 
 stage.on('mouseup touchend pointerup', () => {
@@ -395,65 +441,49 @@ stage.on('mouseup touchend pointerup', () => {
     return;
   }
 
-  socket.emit('draw', {
-    id: currentId,
-    points: lastLine.points(),
-    stroke: lastLine.stroke(),
-    strokeWidth: lastLine.strokeWidth(),
-    globalCompositeOperation: lastLine.globalCompositeOperation()
-  });
+  // Événement final pour le dessin normal
+  if (lastLine) {
+    socket.emit('draw', {
+      id: currentId,
+      points: lastLine.points(),
+      stroke: lastLine.stroke(),
+      strokeWidth: lastLine.strokeWidth(),
+      globalCompositeOperation: lastLine.globalCompositeOperation()
+    });
+  }
 });
 
 // === SOCKET LISTENERS ===
 
-// BRUSH EFFECTS - Utilise le BrushManager
-socket.on('brushEffect', (data) => {
-  brushManager.createNetworkEffect(data);
-});
-
-socket.on('cleanupUserEffects', (data) => {
-  brushManager.cleanupUserEffects(data.socketId);
-});
-
-socket.on('clearCanvas', () => {
-  layer.destroyChildren();
-  brushManager.clearPermanentTraces();
-  layer.draw();
-});
-
-socket.on('restoreShapes', (shapes) => {
-  layer.destroyChildren();
-  brushManager.clearPermanentTraces();
-  shapes.forEach(data => {
-    const line = new Konva.Line({
-      id: data.id, points: data.points, stroke: data.stroke,
-      strokeWidth: data.strokeWidth, globalCompositeOperation: data.globalCompositeOperation,
-      lineCap: 'round', lineJoin: 'round'
-    });
-    layer.add(line);
-  });
-  layer.draw();
-});
-
+// Initialize existing shapes on load
 socket.on('initShapes', shapes => {
   shapes.forEach(data => {
     const line = new Konva.Line({
-      id: data.id, points: data.points, stroke: data.stroke,
-      strokeWidth: data.strokeWidth, globalCompositeOperation: data.globalCompositeOperation,
-      lineCap: 'round', lineJoin: 'round'
+      id: data.id,
+      points: data.points,
+      stroke: data.stroke,
+      strokeWidth: data.strokeWidth,
+      globalCompositeOperation: data.globalCompositeOperation,
+      lineCap: 'round',
+      lineJoin: 'round'
     });
     layer.add(line);
   });
   layer.draw();
 });
 
+// Real-time streaming updates
 socket.on('drawing', data => {
   let shape = layer.findOne('#' + data.id);
   if (!shape) {
     shape = new Konva.Line({
-      id: data.id, points: data.points, stroke: data.stroke,
-      strokeWidth: data.strokeWidth, globalCompositeOperation: data.globalCompositeOperation,
-      lineCap: 'round', lineJoin: 'round'
+      id: data.id,
+      points: data.points,
+      stroke: data.stroke,
+      strokeWidth: data.strokeWidth,
+      globalCompositeOperation: data.globalCompositeOperation,
+      lineCap: 'round',
+      lineJoin: 'round'
     });
     layer.add(shape);
   } else {
@@ -462,17 +492,37 @@ socket.on('drawing', data => {
   layer.batchDraw();
 });
 
+// BRUSH EFFECTS - Utilise le BrushManager
+socket.on('brushEffect', (data) => {
+  if (brushManager) {
+    brushManager.createNetworkEffect(data);
+  }
+});
+
+socket.on('cleanupUserEffects', (data) => {
+  if (brushManager) {
+    brushManager.cleanupUserEffects(data.socketId);
+  }
+});
+
 socket.on('texture', data => createTextureEffect(data.x, data.y, data.color, data.size));
 
 socket.on('draw', data => {
   let shape = layer.findOne('#' + data.id);
   if (shape) {
-    shape.points(data.points).stroke(data.stroke).strokeWidth(data.strokeWidth).globalCompositeOperation(data.globalCompositeOperation);
+    shape.points(data.points);
+    shape.stroke(data.stroke);
+    shape.strokeWidth(data.strokeWidth);
+    shape.globalCompositeOperation(data.globalCompositeOperation);
   } else {
     layer.add(new Konva.Line({
-      id: data.id, points: data.points, stroke: data.stroke,
-      strokeWidth: data.strokeWidth, globalCompositeOperation: data.globalCompositeOperation,
-      lineCap: 'round', lineJoin: 'round'
+      id: data.id,
+      points: data.points,
+      stroke: data.stroke,
+      strokeWidth: data.strokeWidth,
+      globalCompositeOperation: data.globalCompositeOperation,
+      lineCap: 'round',
+      lineJoin: 'round'
     }));
   }
   layer.draw();
@@ -480,7 +530,38 @@ socket.on('draw', data => {
 
 socket.on('deleteShape', ({ id }) => {
   const shape = layer.findOne('#' + id);
-  if (shape) { shape.destroy(); layer.draw(); }
+  if (shape) {
+    shape.destroy();
+    layer.draw();
+  }
+});
+
+socket.on('clearCanvas', () => {
+  layer.destroyChildren();
+  if (brushManager) {
+    brushManager.clearPermanentTraces();
+  }
+  layer.draw();
+});
+
+socket.on('restoreShapes', (shapes) => {
+  layer.destroyChildren();
+  if (brushManager) {
+    brushManager.clearPermanentTraces();
+  }
+  shapes.forEach(data => {
+    const line = new Konva.Line({
+      id: data.id,
+      points: data.points,
+      stroke: data.stroke,
+      strokeWidth: data.strokeWidth,
+      globalCompositeOperation: data.globalCompositeOperation,
+      lineCap: 'round',
+      lineJoin: 'round'
+    });
+    layer.add(line);
+  });
+  layer.draw();
 });
 
 socket.on('shapeCreate', data => {
@@ -531,3 +612,7 @@ document.getElementById('back-home')?.addEventListener('click', () => {
 // Initialisation
 updateZoomDisplay();
 updateColorPicker();
+
+// Debug - Vérifier que tout est chargé
+console.log('Atelier.js loaded, current tool:', currentTool);
+console.log('BrushManager available:', typeof BrushManager !== 'undefined');

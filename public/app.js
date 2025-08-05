@@ -1,4 +1,4 @@
-// public/app.js - VERSION CORRIGÉE ET FONCTIONNELLE
+// public/app.js - VERSION CORRIGÉE POUR SYNCHRONISATION
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -23,9 +23,10 @@ let shapeStartPos = null;
 let brushManager;
 
 // Attendre que BrushManager soit disponible
-window.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
   if (typeof BrushManager !== 'undefined') {
     brushManager = new BrushManager('public', layer, socket);
+    console.log('BrushManager initialized for public');
   } else {
     console.error('BrushManager not loaded');
   }
