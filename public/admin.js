@@ -865,7 +865,8 @@ stage.on('wheel', (e) => {
 
 console.log('✅ Admin.js loaded for chantilly interface with HIGH QUALITY viewport optimization');
 console.log('🎯 BrushManager status: Ready with viewport culling for maximum performance');
-console.log('📍 Only effects in visible area + 20% margin will be rendered');.style.cursor = 'grab';
+console.log('📍 Only effects in visible area + 20% margin will be rendered');
+container.style.cursor = 'grab';
 });
 
 // Zoom in avec notification de mise à jour viewport
