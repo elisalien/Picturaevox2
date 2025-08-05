@@ -1,4 +1,110 @@
-createNeon(x, y, color, size, config, effectId) {
+petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
+        }
+      }
+    };
+    return configs[this.clientType] || configs.public;
+  }
+
+  // Suivi de la zone visible pour /chantilly (admin)
+  setupViewportTracking() {
+    this.updateViewportBounds();
+    
+    if (typeof window !== 'undefined' && window.stage) {
+      window.stage.on('dragend', () => this.updateViewportBounds());
+      window.stage.on('wheel', () => {
+        setTimeout(() => this.updateViewportBounds(), 50);
+      });
+      setInterval(() => this.updateViewportBounds(), 2000);
+    }
+  }
+
+  updateViewportBounds() {
+    if (typeof window !== 'undefined' && window.stage) {
+      const stage = window.stage;
+      const scale = stage.scaleX();
+      const pos = stage.position();
+      
+      // Zone visible avec marge de 20%
+      const margin = 0.2;
+      const width = window.innerWidth / scale;
+      const height = window.innerHeight / scale;
+      const marginX = width * margin;
+      const marginY = height * margin;
+      
+      this.viewportBounds = {
+        x: (-pos.x / scale) - marginX,
+        y: (-pos.y / scale) - marginY,
+        width: width + (marginX * 2),
+        height: height + (marginY * 2)
+      };
+    }
+  }
+
+  // Vérifier si un point est dans la zone visible (optimisation admin)
+  isInViewport(x, y) {
+    if (!this.viewportBounds || this.clientType !== 'admin') return true;
+    
+    const bounds = this.viewportBounds;
+    return x >= bounds.x && x <= bounds.x + bounds.width &&
+           y >= bounds.y && y <= bounds.y + bounds.height;
+  }
+
+  // Admin ne dessine pas, seulement reçoit
+  createNetworkEffect(data) {
+    // Optimisation zone visible pour /chantilly
+    if (!this.isInViewport(data.x, data.y)) {
+      return;
+    }
+    
+    this.createLocalEffect(data.type, data.x, data.y, data.color, data.size);
+  }
+
+  createLocalEffect(type, x, y, color, size) {
+    const effectConfig = this.config.effects[type];
+    if (!effectConfig) return;
+    
+    const effectId = `${this.clientType}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    
+    switch(type) {
+      case 'sparkles': this.createSparkles(x, y, color, size, effectConfig, effectId); break;
+      case 'neon': this.createNeon(x, y, color, size, effectConfig, effectId); break;
+      case 'watercolor': this.createWatercolor(x, y, color, size, effectConfig, effectId); break;
+      case 'electric': this.createElectric(x, y, color, size, effectConfig, effectId); break;
+      case 'fire': this.createFire(x, y, color, size, effectConfig, effectId); break;
+      case 'petals': this.createPetals(x, y, color, size, effectConfig, effectId); break;
+    }
+  }
+
+  // Effets haute qualité pour admin
+  createSparkles(x, y, color, size, config, effectId) {
+    const elements = [];
+    for (let i = 0; i < config.particles; i++) {
+      const offsetX = (Math.random() - 0.5) * size * 1.8; // Plus large pour admin
+      const offsetY = (Math.random() - 0.5) * size * 1.8;
+      const sparkleSize = 1.5 + Math.random() * 4; // Plus grand
+      const isPermanent = Math.random() < 0.5; // Plus de permanents
+      
+      const sparkle = new Konva.Star({
+        x: x + offsetX, y: y + offsetY,
+        numPoints: 4, innerRadius: sparkleSize * 0.4, outerRadius: sparkleSize,
+        fill: color, rotation: Math.random() * 360,
+        opacity: isPermanent ? config.permanentOpacity : 1.0,
+        effectId, createdAt: Date.now(), isPermanent
+      });
+      
+      this.layer.add(sparkle);
+      
+      if (isPermanent) {
+        this.trackPermanentTrace(sparkle, config);
+      } else {
+        elements.push(sparkle);
+        this.animateSparkle(sparkle, config.duration, i);
+      }
+    }
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  createNeon(x, y, color, size, config, effectId) {
     const elements = [];
     for (let i = 0; i < config.particles; i++) {
       const offsetX = (Math.random() - 0.5) * size * 1.0;
@@ -600,29 +706,6 @@ hideUIBtn?.addEventListener('click', () => {
 panBtn?.addEventListener('click', () => {
   setActiveButton(panBtn);
   stage.draggable(true);
-  container.style.cursor = 'grab';
-});
-
-// Zoom in avec notification de mise à jour viewport
-zoomInBtn?.addEventListener('click', () => {
-  setActiveButton(zoomInBtn);
-  stage.draggable(false);
-  const oldScale = stage.scaleX();
-  stage.scale({ x: oldScale * scaleFactor, y: oldScale * scaleFactor });
-  stage.batchDraw();
-  container.style.cursor = 'crosshair';
-  
-  // Notifier le BrushManager du changement de viewport
-  setTimeout(() => brushManager.updateViewportBounds(), 50);
-});
-
-// Zoom out avec notification de mise à jour viewport
-zoomOutBtn?.addEventListener('click', () => {
-  setActiveButton(zoomOutBtn);
-  stage.draggable(false);
-  const oldScale = stage.scaleX();
-  stage.scale({ x: oldScale / scaleFactor, y: oldScale / scaleFactor });
-  stage.batchDraw();
   container.style.cursor = 'crosshair';
   
   // Notifier le BrushManager du changement de viewport
@@ -782,7 +865,30 @@ stage.on('wheel', (e) => {
 
 console.log('✅ Admin.js loaded for chantilly interface with HIGH QUALITY viewport optimization');
 console.log('🎯 BrushManager status: Ready with viewport culling for maximum performance');
-console.log('📍 Only effects in visible area + 20% margin will be rendered');// public/admin.js - VERSION AVEC BRUSHMANAGER INTÉGRÉ HAUTE QUALITÉ + OPTIMISATION ZONE VISIBLE
+console.log('📍 Only effects in visible area + 20% margin will be rendered');.style.cursor = 'grab';
+});
+
+// Zoom in avec notification de mise à jour viewport
+zoomInBtn?.addEventListener('click', () => {
+  setActiveButton(zoomInBtn);
+  stage.draggable(false);
+  const oldScale = stage.scaleX();
+  stage.scale({ x: oldScale * scaleFactor, y: oldScale * scaleFactor });
+  stage.batchDraw();
+  container.style.cursor = 'crosshair';
+  
+  // Notifier le BrushManager du changement de viewport
+  setTimeout(() => brushManager.updateViewportBounds(), 50);
+});
+
+// Zoom out avec notification de mise à jour viewport
+zoomOutBtn?.addEventListener('click', () => {
+  setActiveButton(zoomOutBtn);
+  stage.draggable(false);
+  const oldScale = stage.scaleX();
+  stage.scale({ x: oldScale / scaleFactor, y: oldScale / scaleFactor });
+  stage.batchDraw();
+  container// public/admin.js - VERSION AVEC BRUSHMANAGER INTÉGRÉ HAUTE QUALITÉ + OPTIMISATION ZONE VISIBLE
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -797,8 +903,8 @@ window.stage = stage;
 
 // === BRUSHMANAGER INTÉGRÉ DIRECTEMENT (VERSION ADMIN HAUTE QUALITÉ) ===
 class BrushManager {
-  constructor(interface, layer, socket) {
-    this.interface = interface;
+  constructor(clientType, layer, socket) {
+    this.clientType = clientType;
     this.layer = layer;
     this.socket = socket;
     this.activeEffects = new Map();
@@ -814,12 +920,12 @@ class BrushManager {
     
     // Zone visible pour optimisation (admin uniquement)
     this.viewportBounds = null;
-    if (this.interface === 'admin') {
+    if (this.clientType === 'admin') {
       this.setupViewportTracking();
     }
     
     setInterval(() => this.cleanup(), this.cleanupInterval);
-    console.log(`✅ BrushManager ready for ${interface} with quality:`, this.config.quality);
+    console.log(`✅ BrushManager ready for ${clientType} with quality:`, this.config.quality);
   }
 
   getConfig() {
@@ -863,113 +969,4 @@ class BrushManager {
           watercolor: { drops: 4, duration: 2000, permanentOpacity: 0.08, fadeStartTime: 20 },
           electric: { bolts: 3, segments: 7, duration: 1800, permanentOpacity: 0.08, fadeStartTime: 20 },
           fire: { flames: 5, duration: 1800, permanentOpacity: 0.04, fadeStartTime: 20 },
-          petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
-        }
-      }
-    };
-    return configs[this.interface] || configs.public;
-  }
-
-  // Suivi de la zone visible pour /chantilly (admin)
-  setupViewportTracking() {
-    this.updateViewportBounds();
-    
-    if (typeof window !== 'undefined' && window.stage) {
-      window.stage.on('dragend', () => this.updateViewportBounds());
-      window.stage.on('wheel', () => {
-        setTimeout(() => this.updateViewportBounds(), 50);
-      });
-      setInterval(() => this.updateViewportBounds(), 2000);
-    }
-  }
-
-  updateViewportBounds() {
-    if (typeof window !== 'undefined' && window.stage) {
-      const stage = window.stage;
-      const scale = stage.scaleX();
-      const pos = stage.position();
-      
-      // Zone visible avec marge de 20%
-      const margin = 0.2;
-      const width = window.innerWidth / scale;
-      const height = window.innerHeight / scale;
-      const marginX = width * margin;
-      const marginY = height * margin;
-      
-      this.viewportBounds = {
-        x: (-pos.x / scale) - marginX,
-        y: (-pos.y / scale) - marginY,
-        width: width + (marginX * 2),
-        height: height + (marginY * 2)
-      };
-    }
-  }
-
-  // Vérifier si un point est dans la zone visible (optimisation admin)
-  isInViewport(x, y) {
-    if (!this.viewportBounds || this.interface !== 'admin') return true;
-    
-    const bounds = this.viewportBounds;
-    return x >= bounds.x && x <= bounds.x + bounds.width &&
-           y >= bounds.y && y <= bounds.y + bounds.height;
-  }
-
-  // Admin ne dessine pas, seulement reçoit
-  createNetworkEffect(data) {
-    // Optimisation zone visible pour /chantilly
-    if (!this.isInViewport(data.x, data.y)) {
-      return;
-    }
-    
-    this.createLocalEffect(data.type, data.x, data.y, data.color, data.size);
-  }
-
-  createLocalEffect(type, x, y, color, size) {
-    const effectConfig = this.config.effects[type];
-    if (!effectConfig) return;
-    
-    const effectId = `${this.interface}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    
-    switch(type) {
-      case 'sparkles': this.createSparkles(x, y, color, size, effectConfig, effectId); break;
-      case 'neon': this.createNeon(x, y, color, size, effectConfig, effectId); break;
-      case 'watercolor': this.createWatercolor(x, y, color, size, effectConfig, effectId); break;
-      case 'electric': this.createElectric(x, y, color, size, effectConfig, effectId); break;
-      case 'fire': this.createFire(x, y, color, size, effectConfig, effectId); break;
-      case 'petals': this.createPetals(x, y, color, size, effectConfig, effectId); break;
-    }
-  }
-
-  // Effets haute qualité pour admin
-  createSparkles(x, y, color, size, config, effectId) {
-    const elements = [];
-    for (let i = 0; i < config.particles; i++) {
-      const offsetX = (Math.random() - 0.5) * size * 1.8; // Plus large pour admin
-      const offsetY = (Math.random() - 0.5) * size * 1.8;
-      const sparkleSize = 1.5 + Math.random() * 4; // Plus grand
-      const isPermanent = Math.random() < 0.5; // Plus de permanents
-      
-      const sparkle = new Konva.Star({
-        x: x + offsetX, y: y + offsetY,
-        numPoints: 4, innerRadius: sparkleSize * 0.4, outerRadius: sparkleSize,
-        fill: color, rotation: Math.random() * 360,
-        opacity: isPermanent ? config.permanentOpacity : 1.0,
-        effectId, createdAt: Date.now(), isPermanent
-      });
-      
-      this.layer.add(sparkle);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(sparkle, config);
-      } else {
-        elements.push(sparkle);
-        this.animateSparkle(sparkle, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createNeon(x, y, color, size, config, effectId) {
-    const elements = [];
-    for (let i = 0; i < config.particles; i++) {
-      const
+          petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime:

@@ -13,8 +13,8 @@ window.stage = stage;
 
 // === BRUSHMANAGER INTÉGRÉ DIRECTEMENT (VERSION ATELIER) ===
 class BrushManager {
-  constructor(interface, layer, socket) {
-    this.interface = interface;
+  constructor(clientType, layer, socket) {
+    this.clientType = clientType;
     this.layer = layer;
     this.socket = socket;
     this.activeEffects = new Map();
@@ -29,7 +29,7 @@ class BrushManager {
     this.cleanupInterval = this.config.cleanupInterval;
     
     setInterval(() => this.cleanup(), this.cleanupInterval);
-    console.log(`✅ BrushManager ready for ${interface} with quality:`, this.config.quality);
+    console.log(`✅ BrushManager ready for ${clientType} with quality:`, this.config.quality);
   }
 
   getConfig() {
@@ -77,7 +77,7 @@ class BrushManager {
         }
       }
     };
-    return configs[this.interface] || configs.public;
+    return configs[this.clientType] || configs.public;
   }
 
   createAndEmitEffect(type, x, y, color, size) {
@@ -89,7 +89,7 @@ class BrushManager {
     if (this.socket) {
       this.socket.emit('brushEffect', {
         type, x, y, color, size,
-        interface: this.interface,
+        interface: this.clientType,
         timestamp: now
       });
     }
@@ -104,7 +104,7 @@ class BrushManager {
     const effectConfig = this.config.effects[type];
     if (!effectConfig) return;
     
-    const effectId = `${this.interface}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const effectId = `${this.clientType}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     
     switch(type) {
       case 'sparkles': this.createSparkles(x, y, color, size, effectConfig, effectId); break;
