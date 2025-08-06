@@ -1,4 +1,85 @@
-petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
+// public/admin.js - VERSION ADMIN OBSERVATION SEULE AVEC BRUSHMANAGER INTÉGRÉ
+const socket = io();
+const stage = new Konva.Stage({
+  container: 'canvas-container',
+  width: window.innerWidth,
+  height: window.innerHeight
+});
+const layer = new Konva.Layer();
+stage.add(layer);
+
+// Rendre stage disponible globalement
+window.stage = stage;
+
+// === BRUSHMANAGER INTÉGRÉ DIRECTEMENT (VERSION ADMIN HAUTE QUALITÉ - RÉCEPTION SEULE) ===
+class BrushManager {
+  constructor(clientType, layer, socket) {
+    this.clientType = clientType;
+    this.layer = layer;
+    this.socket = socket; // null pour admin car il n'émet pas
+    this.activeEffects = new Map();
+    this.permanentTraces = new Map();
+    this.lastEmit = 0;
+    this.effectCount = 0;
+    this.permanentCount = 0;
+    
+    this.config = this.getConfig();
+    this.maxPermanent = this.config.maxPermanent;
+    this.throttleTime = this.config.throttleTime;
+    this.cleanupInterval = this.config.cleanupInterval;
+    
+    // Zone visible pour optimisation (admin uniquement)
+    this.viewportBounds = null;
+    if (this.clientType === 'admin') {
+      this.setupViewportTracking();
+    }
+    
+    setInterval(() => this.cleanup(), this.cleanupInterval);
+    console.log(`✅ BrushManager ready for ${clientType} with quality:`, this.config.quality);
+  }
+
+  getConfig() {
+    const configs = {
+      public: {
+        quality: 'low',
+        maxPermanent: 100,
+        throttleTime: 500,
+        cleanupInterval: 20000,
+        effects: {
+          sparkles: { particles: 2, duration: 800, permanentOpacity: 0.05, fadeStartTime: 10 },
+          neon: { particles: 2, duration: 1000, permanentOpacity: 0.06, fadeStartTime: 10 },
+          watercolor: { drops: 1, duration: 1000, permanentOpacity: 0.03, fadeStartTime: 10 },
+          electric: { bolts: 1, segments: 3, duration: 800, permanentOpacity: 0.04, fadeStartTime: 10 },
+          fire: { flames: 2, duration: 800, permanentOpacity: 0.02, fadeStartTime: 10 },
+          petals: { count: 1, duration: 1500, permanentOpacity: 0.04, fadeStartTime: 10 }
+        }
+      },
+      atelier: {
+        quality: 'medium',
+        maxPermanent: 200,
+        throttleTime: 300,
+        cleanupInterval: 25000,
+        effects: {
+          sparkles: { particles: 4, duration: 1200, permanentOpacity: 0.08, fadeStartTime: 15 },
+          neon: { particles: 4, duration: 1500, permanentOpacity: 0.1, fadeStartTime: 15 },
+          watercolor: { drops: 3, duration: 1500, permanentOpacity: 0.05, fadeStartTime: 15 },
+          electric: { bolts: 2, segments: 5, duration: 1200, permanentOpacity: 0.06, fadeStartTime: 15 },
+          fire: { flames: 3, duration: 1200, permanentOpacity: 0.03, fadeStartTime: 15 },
+          petals: { count: 3, duration: 2500, permanentOpacity: 0.07, fadeStartTime: 15 }
+        }
+      },
+      admin: {
+        quality: 'high',
+        maxPermanent: 300,
+        throttleTime: 150,
+        cleanupInterval: 30000,
+        effects: {
+          sparkles: { particles: 6, duration: 1800, permanentOpacity: 0.12, fadeStartTime: 20 },
+          neon: { particles: 6, duration: 2000, permanentOpacity: 0.15, fadeStartTime: 20 },
+          watercolor: { drops: 4, duration: 2000, permanentOpacity: 0.08, fadeStartTime: 20 },
+          electric: { bolts: 3, segments: 7, duration: 1800, permanentOpacity: 0.08, fadeStartTime: 20 },
+          fire: { flames: 5, duration: 1800, permanentOpacity: 0.04, fadeStartTime: 20 },
+          petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
         }
       }
     };
@@ -79,10 +160,10 @@ petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
   createSparkles(x, y, color, size, config, effectId) {
     const elements = [];
     for (let i = 0; i < config.particles; i++) {
-      const offsetX = (Math.random() - 0.5) * size * 1.8; // Plus large pour admin
+      const offsetX = (Math.random() - 0.5) * size * 1.8;
       const offsetY = (Math.random() - 0.5) * size * 1.8;
-      const sparkleSize = 1.5 + Math.random() * 4; // Plus grand
-      const isPermanent = Math.random() < 0.5; // Plus de permanents
+      const sparkleSize = 1.5 + Math.random() * 4;
+      const isPermanent = Math.random() < 0.5;
       
       const sparkle = new Konva.Star({
         x: x + offsetX, y: y + offsetY,
@@ -109,7 +190,7 @@ petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
     for (let i = 0; i < config.particles; i++) {
       const offsetX = (Math.random() - 0.5) * size * 1.0;
       const offsetY = (Math.random() - 0.5) * size * 1.0;
-      const particleSize = 2.5 + Math.random() * 4; // Plus grand pour admin
+      const particleSize = 2.5 + Math.random() * 4;
       const isPermanent = Math.random() < 0.5;
       
       const particle = new Konva.Circle({
@@ -136,7 +217,7 @@ petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
     for (let i = 0; i < config.drops; i++) {
       const offsetX = (Math.random() - 0.5) * size * 0.8;
       const offsetY = (Math.random() - 0.5) * size * 0.8;
-      const dropSize = size * (0.5 + Math.random() * 0.8); // Plus grand
+      const dropSize = size * (0.5 + Math.random() * 0.8);
       const isPermanent = Math.random() < 0.5;
       
       const drop = new Konva.Circle({
@@ -167,7 +248,7 @@ petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
       
       for (let j = 0; j < config.segments; j++) {
         const angle = Math.random() * Math.PI * 2;
-        const distance = (Math.random() * size * 1.0) + (size * 0.4); // Plus long
+        const distance = (Math.random() * size * 1.0) + (size * 0.4);
         currentX += Math.cos(angle) * distance;
         currentY += Math.sin(angle) * distance;
         points.push(currentX, currentY);
@@ -177,7 +258,7 @@ petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
       
       const bolt = new Konva.Line({
         points, stroke: color,
-        strokeWidth: isPermanent ? 1.2 : (2 + Math.random() * 3), // Plus épais
+        strokeWidth: isPermanent ? 1.2 : (2 + Math.random() * 3),
         opacity: isPermanent ? config.permanentOpacity : 0.9,
         lineCap: 'round', lineJoin: 'round',
         shadowColor: color, shadowBlur: isPermanent ? 4 : 12, shadowOpacity: isPermanent ? 0.5 : 0.8,
@@ -205,7 +286,7 @@ petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
       
       const flame = new Konva.Ellipse({
         x: x + offsetX, y: y + offsetY,
-        radiusX: isPermanent ? 3 : (4 + Math.random() * 4), // Plus grand
+        radiusX: isPermanent ? 3 : (4 + Math.random() * 4),
         radiusY: isPermanent ? 4 : (8 + Math.random() * 5),
         fill: color, opacity: isPermanent ? config.permanentOpacity : 0.8,
         shadowColor: '#FF4500', shadowBlur: isPermanent ? 3 : 12, shadowOpacity: isPermanent ? 0.4 : 0.6,
@@ -229,7 +310,7 @@ petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
     for (let i = 0; i < config.count; i++) {
       const offsetX = (Math.random() - 0.5) * size * 1.0;
       const offsetY = (Math.random() - 0.5) * size * 1.0;
-      const petalSize = size * (0.4 + Math.random() * 0.5); // Plus grand
+      const petalSize = size * (0.4 + Math.random() * 0.5);
       const isPermanent = Math.random() < 0.5;
       
       const petal = new Konva.Ellipse({
@@ -706,6 +787,32 @@ hideUIBtn?.addEventListener('click', () => {
 panBtn?.addEventListener('click', () => {
   setActiveButton(panBtn);
   stage.draggable(true);
+  container.style.cursor = 'grab';
+  
+  // Notifier le BrushManager du changement de viewport
+  setTimeout(() => brushManager.updateViewportBounds(), 50);
+});
+
+// Zoom in avec notification de mise à jour viewport
+zoomInBtn?.addEventListener('click', () => {
+  setActiveButton(zoomInBtn);
+  stage.draggable(false);
+  const oldScale = stage.scaleX();
+  stage.scale({ x: oldScale * scaleFactor, y: oldScale * scaleFactor });
+  stage.batchDraw();
+  container.style.cursor = 'crosshair';
+  
+  // Notifier le BrushManager du changement de viewport
+  setTimeout(() => brushManager.updateViewportBounds(), 50);
+});
+
+// Zoom out avec notification de mise à jour viewport
+zoomOutBtn?.addEventListener('click', () => {
+  setActiveButton(zoomOutBtn);
+  stage.draggable(false);
+  const oldScale = stage.scaleX();
+  stage.scale({ x: oldScale / scaleFactor, y: oldScale / scaleFactor });
+  stage.batchDraw();
   container.style.cursor = 'crosshair';
   
   // Notifier le BrushManager du changement de viewport
@@ -863,112 +970,10 @@ stage.on('wheel', (e) => {
   setTimeout(() => brushManager.updateViewportBounds(), 100);
 });
 
+// Initialisation par défaut
+stage.draggable(true);
+container.style.cursor = 'grab';
+
 console.log('✅ Admin.js loaded for chantilly interface with HIGH QUALITY viewport optimization');
 console.log('🎯 BrushManager status: Ready with viewport culling for maximum performance');
 console.log('📍 Only effects in visible area + 20% margin will be rendered');
-container.style.cursor = 'grab';
-});
-
-// Zoom in avec notification de mise à jour viewport
-zoomInBtn?.addEventListener('click', () => {
-  setActiveButton(zoomInBtn);
-  stage.draggable(false);
-  const oldScale = stage.scaleX();
-  stage.scale({ x: oldScale * scaleFactor, y: oldScale * scaleFactor });
-  stage.batchDraw();
-  container.style.cursor = 'crosshair';
-  
-  // Notifier le BrushManager du changement de viewport
-  setTimeout(() => brushManager.updateViewportBounds(), 50);
-});
-
-// Zoom out avec notification de mise à jour viewport
-zoomOutBtn?.addEventListener('click', () => {
-  setActiveButton(zoomOutBtn);
-  stage.draggable(false);
-  const oldScale = stage.scaleX();
-  stage.scale({ x: oldScale / scaleFactor, y: oldScale / scaleFactor });
-  stage.batchDraw();
-  container// public/admin.js - VERSION AVEC BRUSHMANAGER INTÉGRÉ HAUTE QUALITÉ + OPTIMISATION ZONE VISIBLE
-const socket = io();
-const stage = new Konva.Stage({
-  container: 'canvas-container',
-  width: window.innerWidth,
-  height: window.innerHeight
-});
-const layer = new Konva.Layer();
-stage.add(layer);
-
-// Rendre stage disponible globalement
-window.stage = stage;
-
-// === BRUSHMANAGER INTÉGRÉ DIRECTEMENT (VERSION ADMIN HAUTE QUALITÉ) ===
-class BrushManager {
-  constructor(clientType, layer, socket) {
-    this.clientType = clientType;
-    this.layer = layer;
-    this.socket = socket;
-    this.activeEffects = new Map();
-    this.permanentTraces = new Map();
-    this.lastEmit = 0;
-    this.effectCount = 0;
-    this.permanentCount = 0;
-    
-    this.config = this.getConfig();
-    this.maxPermanent = this.config.maxPermanent;
-    this.throttleTime = this.config.throttleTime;
-    this.cleanupInterval = this.config.cleanupInterval;
-    
-    // Zone visible pour optimisation (admin uniquement)
-    this.viewportBounds = null;
-    if (this.clientType === 'admin') {
-      this.setupViewportTracking();
-    }
-    
-    setInterval(() => this.cleanup(), this.cleanupInterval);
-    console.log(`✅ BrushManager ready for ${clientType} with quality:`, this.config.quality);
-  }
-
-  getConfig() {
-    const configs = {
-      public: {
-        quality: 'low',
-        maxPermanent: 100,
-        throttleTime: 500,
-        cleanupInterval: 20000,
-        effects: {
-          sparkles: { particles: 2, duration: 800, permanentOpacity: 0.05, fadeStartTime: 10 },
-          neon: { particles: 2, duration: 1000, permanentOpacity: 0.06, fadeStartTime: 10 },
-          watercolor: { drops: 1, duration: 1000, permanentOpacity: 0.03, fadeStartTime: 10 },
-          electric: { bolts: 1, segments: 3, duration: 800, permanentOpacity: 0.04, fadeStartTime: 10 },
-          fire: { flames: 2, duration: 800, permanentOpacity: 0.02, fadeStartTime: 10 },
-          petals: { count: 1, duration: 1500, permanentOpacity: 0.04, fadeStartTime: 10 }
-        }
-      },
-      atelier: {
-        quality: 'medium',
-        maxPermanent: 200,
-        throttleTime: 300,
-        cleanupInterval: 25000,
-        effects: {
-          sparkles: { particles: 4, duration: 1200, permanentOpacity: 0.08, fadeStartTime: 15 },
-          neon: { particles: 4, duration: 1500, permanentOpacity: 0.1, fadeStartTime: 15 },
-          watercolor: { drops: 3, duration: 1500, permanentOpacity: 0.05, fadeStartTime: 15 },
-          electric: { bolts: 2, segments: 5, duration: 1200, permanentOpacity: 0.06, fadeStartTime: 15 },
-          fire: { flames: 3, duration: 1200, permanentOpacity: 0.03, fadeStartTime: 15 },
-          petals: { count: 3, duration: 2500, permanentOpacity: 0.07, fadeStartTime: 15 }
-        }
-      },
-      
-      admin: {
-        quality: 'high',
-        maxPermanent: 300,
-        throttleTime: 150,
-        cleanupInterval: 30000,
-        effects: {
-          sparkles: { particles: 6, duration: 1800, permanentOpacity: 0.12, fadeStartTime: 20 },
-          neon: { particles: 6, duration: 2000, permanentOpacity: 0.15, fadeStartTime: 20 },
-          watercolor: { drops: 4, duration: 2000, permanentOpacity: 0.08, fadeStartTime: 20 },
-          electric: { bolts: 3, segments: 7, duration: 1800, permanentOpacity: 0.08, fadeStartTime: 20 },
-          fire: { flames: 5, duration: 1800, permanentOpacity: 0.04, fadeStartTime: 20 },
-          petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime:
