@@ -922,18 +922,28 @@ class BrushManager {
 
   // Suppression complète incluant les tracés (pour clear canvas)
   clearEverything() {
+    console.log('🧹 BrushManager: clearEverything() called');
+    
+    // Clear les effets temporaires
     this.clearAllEffects();
     
-    // Supprimer aussi les tracés permanents
+    // Supprimer aussi les tracés permanents du layer
     const allChildren = this.layer.getChildren().toArray();
-    allChildren.forEach(child => {
-      if (child.isPermanentTrace) {
-        child.destroy();
-      }
+    const permanentTraces = allChildren.filter(child => child.isPermanentTrace);
+    const temporaryEffects = allChildren.filter(child => child.isTemporaryEffect);
+    
+    console.log(`🧹 BrushManager: Found ${permanentTraces.length} permanent traces and ${temporaryEffects.length} temporary effects to clear`);
+    
+    permanentTraces.forEach(child => {
+      child.destroy();
+    });
+    
+    temporaryEffects.forEach(child => {
+      child.destroy();
     });
     
     this.layer.batchDraw();
-    console.log('🧹 BrushManager: Everything cleared including permanent traces');
+    console.log(`🧹 BrushManager: clearEverything() complete - cleared ${permanentTraces.length + temporaryEffects.length} total elements`);
   }
 
   cleanupUserEffects(socketId) {

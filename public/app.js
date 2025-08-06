@@ -321,20 +321,50 @@ function createTextureEffect(x, y, color, size) {
 
 // === SOCKET LISTENERS ===
 
+// Initialize existing shapes on load (INCLUDING permanent traces)
 socket.on('initShapes', shapes => {
   shapes.forEach(data => {
-    const line = new Konva.Line({
-      id: data.id,
-      points: data.points,
-      stroke: data.stroke,
-      strokeWidth: data.strokeWidth,
-      globalCompositeOperation: data.globalCompositeOperation,
-      lineCap: 'round',
-      lineJoin: 'round'
-    });
-    layer.add(line);
+    if (data.type === 'permanentTrace') {
+      // ✅ NOUVEAU : Recréer les tracés permanents depuis les données serveur
+      let element;
+      
+      switch(data.shapeType) {
+        case 'Star':
+          element = new Konva.Star(data.attrs);
+          break;
+        case 'Circle':
+          element = new Konva.Circle(data.attrs);
+          break;
+        case 'Line':
+          element = new Konva.Line(data.attrs);
+          break;
+        case 'Ellipse':
+          element = new Konva.Ellipse(data.attrs);
+          break;
+      }
+      
+      if (element) {
+        element.id(data.id);
+        element.isPermanentTrace = true;
+        layer.add(element);
+      }
+    } else {
+      // Tracé normal (brush classique)
+      const line = new Konva.Line({
+        id: data.id,
+        points: data.points,
+        stroke: data.stroke,
+        strokeWidth: data.strokeWidth,
+        globalCompositeOperation: data.globalCompositeOperation,
+        lineCap: 'round',
+        lineJoin: 'round'
+      });
+      layer.add(line);
+    }
   });
   layer.draw();
+  
+  console.log(`✅ Loaded ${shapes.length} shapes (including permanent traces)`);
 });
 
 socket.on('brushEffect', (data) => {

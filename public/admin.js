@@ -187,13 +187,17 @@ socket.on('deleteShape', ({ id }) => {
   }
 });
 
-// ✅ CORRIGÉ : Clear canvas pour admin avec tracés permanents
+// ✅ CORRIGÉ : Clear canvas pour admin avec debug détaillé
 socket.on('clearCanvas', () => {
-  const childrenCount = layer.getChildren().length;
+  const childrenBefore = layer.getChildren().length;
+  console.log(`🧼 ADMIN received clearCanvas event - ${childrenBefore} elements to clear`);
+  
   layer.destroyChildren(); // ✅ Supprime TOUT (y compris tracés permanents)
   brushManager.clearEverything(); // ✅ Clear complet
   layer.draw();
-  console.log(`🧼 ADMIN received clearCanvas - ${childrenCount} elements cleared (including permanent traces)`);
+  
+  const childrenAfter = layer.getChildren().length;
+  console.log(`🧼 ADMIN clearCanvas complete - ${childrenBefore} elements cleared, ${childrenAfter} remaining`);
 });
 
 socket.on('restoreShapes', (shapes) => {
@@ -276,36 +280,52 @@ document.addEventListener('keydown', (e) => {
     showAdminNotification('Undo Global ↶ (Limité à 2 actions)');
   }
   
-  // ✅ CORRIGÉ : Clear global admin
+  // ✅ CORRIGÉ : Clear global admin avec debug
   if (e.ctrlKey && e.shiftKey && e.key === 'C') {
     e.preventDefault();
     
+    console.log('🧼 ADMIN: Ctrl+Shift+C pressed');
+    
     if (confirm('ADMIN: Effacer TOUT le canvas pour TOUS les utilisateurs ?')) {
+      console.log(`🧼 ADMIN: About to clear ${layer.getChildren().length} local elements via keyboard`);
+      
       // ✅ CORRECTION : Clear local d'abord
       layer.destroyChildren();
       brushManager.clearEverything();
       layer.draw();
       
+      console.log('🧼 ADMIN: Local clear done via keyboard, sending global command...');
+      
       // ✅ Puis envoyer la commande globale
       socket.emit('clearCanvas');
+      
+      console.log('🧼 ADMIN: Global clear command sent via keyboard');
       
       showAdminNotification('Canvas Cleared Globally 🧼');
     }
   }
   
-  // ✅ CORRIGÉ : Reset COMPLET
+  // ✅ CORRIGÉ : Reset COMPLET avec debug
   if (e.ctrlKey && e.shiftKey && e.key === 'R') {
     e.preventDefault();
     
+    console.log('🧼 ADMIN: Ctrl+Shift+R pressed (RESET COMPLET)');
+    
     if (confirm('ADMIN: Reset COMPLET (dessins + effets) pour TOUS les utilisateurs ?')) {
+      console.log(`🧼 ADMIN: About to do COMPLETE RESET of ${layer.getChildren().length} local elements`);
+      
       // Clear local complet
       layer.destroyChildren();
       brushManager.clearEverything();
       layer.draw();
       
+      console.log('🧼 ADMIN: Local complete clear done, sending global commands...');
+      
       // Clear global complet - COMMANDES SÉPARÉES
       socket.emit('clearCanvas'); // Supprime les dessins
       socket.emit('adminResetBrushEffects'); // Supprime les effets
+      
+      console.log('🧼 ADMIN: Global complete reset commands sent');
       
       showAdminNotification('Reset COMPLET Global 🧼✨');
     }
@@ -539,21 +559,31 @@ resetEffectsBtn?.addEventListener('click', () => {
   showAdminNotification('Effets Reset Globalement ✨');
 });
 
-// ✅ CORRIGÉ : Clear canvas button
+// ✅ CORRIGÉ : Clear canvas button avec debug
 clearBtn?.addEventListener('click', () => {
+  console.log('🧼 ADMIN: Clear button clicked');
+  
   if (confirm('ADMIN: Effacer TOUT pour TOUS les utilisateurs ?')) {
     setActiveButton(clearBtn);
     
-    // Clear local
+    console.log(`🧼 ADMIN: About to clear ${layer.getChildren().length} local elements`);
+    
+    // Clear local d'abord
     layer.destroyChildren();
     brushManager.clearEverything();
     layer.draw();
     
-    // Clear global
-    socket.emit('clearCanvas');
-    socket.emit('adminResetBrushEffects');
+    console.log('🧼 ADMIN: Local clear done, sending global clear commands...');
+    
+    // Clear global - COMMANDES SÉPARÉES
+    socket.emit('clearCanvas'); // Supprime les dessins
+    socket.emit('adminResetBrushEffects'); // Supprime les effets
+    
+    console.log('🧼 ADMIN: Global clear commands sent');
     
     showAdminNotification('Reset COMPLET Global 🧼✨');
+  } else {
+    console.log('🧼 ADMIN: Clear cancelled by user');
   }
 });
 

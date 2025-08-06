@@ -200,14 +200,16 @@ io.on('connection', socket => {
     });
     
     // ✅ CORRECTION MAJEURE : Vider TOUT le store shapes (incluant tracés permanents)
-    for (let id in shapes) {
+    const shapeIds = Object.keys(shapes);
+    shapeIds.forEach(id => {
       delete shapes[id];
-    }
+    });
     
     // ✅ CORRECTION : Envoyer à TOUS les clients (y compris admin)
     io.emit('clearCanvas');
     
-    console.log('🧼 Canvas cleared globally (including permanent traces) - shapes remaining:', Object.keys(shapes).length);
+    console.log(`🧼 Canvas cleared globally (including permanent traces) - shapes remaining: ${Object.keys(shapes).length}`);
+    console.log(`🧼 Cleared ${shapeIds.length} shapes total`);
   });
 
   // Undo action - Limité à 2 actions
