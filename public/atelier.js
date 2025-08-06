@@ -91,6 +91,8 @@ class BrushManager {
   }
 
   createNetworkEffect(data) {
+    // Les données reçues sont en coordonnées réseau, on les utilise directement
+    // car elles correspondent aux coordonnées de canvas sans transformation
     this.createLocalEffect(data.type, data.x, data.y, data.color, data.size);
   }
 
@@ -932,15 +934,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   if (['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
     isDrawing = true;
     currentId = generateId();
-    // Utiliser les coordonnées réseau pour l'émission mais les coordonnées locales pour l'affichage
-    brushManager.createLocalEffect(currentTool, localPos.x, localPos.y, currentColor, pressureSize);
-    if (socket) {
-      socket.emit('brushEffect', {
-        type: currentTool, x: networkPos.x, y: networkPos.y, color: currentColor, size: pressureSize,
-        interface: 'atelier',
-        timestamp: Date.now()
-      });
-    }
+    brushManager.createAndEmitEffect(currentTool, networkPos.x, networkPos.y, currentColor, pressureSize);
     return;
   }
 
@@ -957,6 +951,15 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     lineJoin: 'round'
   });
   layer.add(lastLine);
+  
+  // Émettre avec les coordonnées réseau pour la synchronisation
+  emitDrawingThrottled({
+    id: currentId,
+    points: [networkPos.x, networkPos.y],
+    stroke: currentColor,
+    strokeWidth: pressureSize,
+    globalCompositeOperation: currentTool === 'eraser' ? 'destination-out' : 'source-over'
+  });
 });
 
 stage.on('mousemove touchmove pointermove', (evt) => {
@@ -1024,16 +1027,7 @@ stage.on('mousemove touchmove pointermove', (evt) => {
 
   // BRUSH ANIMÉS - Continuer l'effet
   if (['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
-    // Utiliser les coordonnées locales pour l'affichage local mais réseau pour l'émission
-    brushManager.createLocalEffect(currentTool, localPos.x, localPos.y, currentColor, pressureSize);
-    if (socket && Date.now() - brushManager.lastEmit >= brushManager.throttleTime) {
-      socket.emit('brushEffect', {
-        type: currentTool, x: networkPos.x, y: networkPos.y, color: currentColor, size: pressureSize,
-        interface: 'atelier',
-        timestamp: Date.now()
-      });
-      brushManager.lastEmit = Date.now();
-    }
+    brushManager.createAndEmitEffect(currentTool, networkPos.x, networkPos.y, currentColor, pressureSize);
     return;
   }
 
@@ -1043,9 +1037,23 @@ stage.on('mousemove touchmove pointermove', (evt) => {
     lastLine.strokeWidth(pressureSize);
     layer.batchDraw();
 
+    // Pour la synchronisation réseau, construire les points réseau
+    const localPoints = lastLine.points();
+    const networkPoints = [];
+    
+    // Convertir tous les points locaux en points réseau
+    for (let i = 0; i < localPoints.length; i += 2) {
+      const localX = localPoints[i];
+      const localY = localPoints[i + 1];
+      // Convertir les coordonnées locales en coordonnées réseau
+      const netX = localX * stage.scaleX() + stage.x();
+      const netY = localY * stage.scaleY() + stage.y();
+      networkPoints.push(netX, netY);
+    }
+
     emitDrawingThrottled({
       id: currentId,
-      points: lastLine.points(),
+      points: networkPoints,
       stroke: lastLine.stroke(),
       strokeWidth: lastLine.strokeWidth(),
       globalCompositeOperation: lastLine.globalCompositeOperation()
@@ -1087,9 +1095,21 @@ stage.on('mouseup touchend pointerup', () => {
 
   // Événement final pour le dessin normal
   if (lastLine) {
+    // Convertir les points locaux en points réseau pour la synchronisation finale
+    const localPoints = lastLine.points();
+    const networkPoints = [];
+    
+    for (let i = 0; i < localPoints.length; i += 2) {
+      const localX = localPoints[i];
+      const localY = localPoints[i + 1];
+      const netX = localX * stage.scaleX() + stage.x();
+      const netY = localY * stage.scaleY() + stage.y();
+      networkPoints.push(netX, netY);
+    }
+    
     socket.emit('draw', {
       id: currentId,
-      points: lastLine.points(),
+      points: networkPoints,
       stroke: lastLine.stroke(),
       strokeWidth: lastLine.strokeWidth(),
       globalCompositeOperation: lastLine.globalCompositeOperation()
@@ -1130,10 +1150,22 @@ socket.on('initShapes', shapes => {
 
 socket.on('drawing', data => {
   let shape = layer.findOne('#' + data.id);
+  
+  // Convertir les points réseau en points locaux
+  const networkPoints = data.points;
+  const localPoints = [];
+  for (let i = 0; i < networkPoints.length; i += 2) {
+    const netX = networkPoints[i];
+    const netY = networkPoints[i + 1];
+    const localX = (netX - stage.x()) / stage.scaleX();
+    const localY = (netY - stage.y()) / stage.scaleY();
+    localPoints.push(localX, localY);
+  }
+  
   if (!shape) {
     shape = new Konva.Line({
       id: data.id,
-      points: data.points,
+      points: localPoints,
       stroke: data.stroke,
       strokeWidth: data.strokeWidth,
       globalCompositeOperation: data.globalCompositeOperation,
@@ -1142,7 +1174,7 @@ socket.on('drawing', data => {
     });
     layer.add(shape);
   } else {
-    shape.points(data.points);
+    shape.points(localPoints);
     shape.strokeWidth(data.strokeWidth);
   }
   layer.batchDraw();
@@ -1150,26 +1182,45 @@ socket.on('drawing', data => {
 
 // BRUSH EFFECTS - Utilise le BrushManager amélioré
 socket.on('brushEffect', (data) => {
-  brushManager.createNetworkEffect(data);
+  // Convertir les coordonnées réseau en coordonnées locales pour l'affichage
+  const localX = (data.x - stage.x()) / stage.scaleX();
+  const localY = (data.y - stage.y()) / stage.scaleY();
+  brushManager.createLocalEffect(data.type, localX, localY, data.color, data.size);
 });
 
 socket.on('cleanupUserEffects', (data) => {
   brushManager.cleanupUserEffects(data.socketId);
 });
 
-socket.on('texture', data => createTextureEffect(data.x, data.y, data.color, data.size));
+socket.on('texture', data => {
+  // Convertir les coordonnées réseau en coordonnées locales
+  const localX = (data.x - stage.x()) / stage.scaleX();
+  const localY = (data.y - stage.y()) / stage.scaleY();
+  createTextureEffect(localX, localY, data.color, data.size);
+});
 
 socket.on('draw', data => {
+  // Convertir les points réseau en points locaux
+  const networkPoints = data.points;
+  const localPoints = [];
+  for (let i = 0; i < networkPoints.length; i += 2) {
+    const netX = networkPoints[i];
+    const netY = networkPoints[i + 1];
+    const localX = (netX - stage.x()) / stage.scaleX();
+    const localY = (netY - stage.y()) / stage.scaleY();
+    localPoints.push(localX, localY);
+  }
+  
   let shape = layer.findOne('#' + data.id);
   if (shape) {
-    shape.points(data.points);
+    shape.points(localPoints);
     shape.stroke(data.stroke);
     shape.strokeWidth(data.strokeWidth);
     shape.globalCompositeOperation(data.globalCompositeOperation);
   } else {
     const line = new Konva.Line({
       id: data.id,
-      points: data.points,
+      points: localPoints,
       stroke: data.stroke,
       strokeWidth: data.strokeWidth,
       globalCompositeOperation: data.globalCompositeOperation,

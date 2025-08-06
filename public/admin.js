@@ -944,17 +944,39 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     
     if (confirm('ADMIN: Effacer TOUT le canvas pour TOUS les utilisateurs ?')) {
+      // Clear local
       layer.destroyChildren();
       brushManager.clearPermanentTraces();
       layer.draw();
+      
+      // Clear global via socket
       socket.emit('clearCanvas');
       
       showAdminNotification('Canvas Cleared Globally 🧼');
     }
   }
   
-  // Raccourci Ctrl+Shift+R pour reset des brush effects globalement
+  // Raccourci Ctrl+Shift+R pour reset COMPLET (dessins + brush effects) globalement
   if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+    e.preventDefault();
+    
+    if (confirm('ADMIN: Reset COMPLET (dessins + effets) pour TOUS les utilisateurs ?')) {
+      // Clear local complet
+      layer.destroyChildren();
+      brushManager.clearPermanentTraces();
+      brushManager.activeEffects.clear();
+      layer.draw();
+      
+      // Clear global complet
+      socket.emit('clearCanvas'); // Supprime les dessins
+      socket.emit('adminResetBrushEffects'); // Supprime les effets
+      
+      showAdminNotification('Reset COMPLET Global 🧼✨');
+    }
+  }
+  
+  // NOUVEAU : Raccourci Ctrl+Shift+E pour reset seulement les brush effects
+  if (e.ctrlKey && e.shiftKey && e.key === 'E') {
     e.preventDefault();
     
     // Nettoyer tous les brush effects locaux
@@ -965,7 +987,7 @@ document.addEventListener('keydown', (e) => {
     // Demander à tous les clients de faire pareil via un événement spécial
     socket.emit('adminResetBrushEffects');
     
-    showAdminNotification('Brush Effects Reset Globally ✨');
+    showAdminNotification('Effets Brush Reset Globalement ✨');
   }
 });
 
@@ -1030,6 +1052,7 @@ const resetZoomBtn = document.getElementById('reset-zoom');
 const bgBlackBtn = document.getElementById('bg-black');
 const bgWhiteBtn = document.getElementById('bg-white');
 const eraserBtn = document.getElementById('eraser');
+const resetEffectsBtn = document.getElementById('reset-effects');
 const clearBtn = document.getElementById('clear-canvas');
 const exportBtn = document.getElementById('export');
 const backHomeBtn = document.getElementById('back-home');
@@ -1042,7 +1065,7 @@ const toolbar = document.querySelector('.toolbar');
 const minimap = document.getElementById('minimap');
 
 function setActiveButton(activeBtn) {
-  [panBtn, zoomInBtn, zoomOutBtn, resetZoomBtn, bgBlackBtn, bgWhiteBtn, eraserBtn, clearBtn, exportBtn, backHomeBtn, hideUIBtn]
+  [panBtn, zoomInBtn, zoomOutBtn, resetZoomBtn, bgBlackBtn, bgWhiteBtn, eraserBtn, resetEffectsBtn, clearBtn, exportBtn, backHomeBtn, hideUIBtn]
     .forEach(btn => btn?.classList.remove('active'));
   activeBtn?.classList.add('active');
 }
@@ -1178,13 +1201,38 @@ stage.on('mouseout', evt => {
   }
 });
 
+// Reset effects only
+resetEffectsBtn?.addEventListener('click', () => {
+  setActiveButton(resetEffectsBtn);
+  
+  // Clear local brush effects
+  brushManager.clearPermanentTraces();
+  brushManager.activeEffects.clear();
+  layer.batchDraw();
+  
+  // Clear global brush effects
+  socket.emit('adminResetBrushEffects');
+  
+  showAdminNotification('Effets Reset Globalement ✨');
+});
+
 // Clear canvas
 clearBtn?.addEventListener('click', () => {
-  setActiveButton(clearBtn);
-  layer.destroyChildren();
-  brushManager.clearPermanentTraces();
-  layer.draw();
-  socket.emit('clearCanvas');
+  if (confirm('ADMIN: Effacer TOUT pour TOUS les utilisateurs ?')) {
+    setActiveButton(clearBtn);
+    
+    // Clear local
+    layer.destroyChildren();
+    brushManager.clearPermanentTraces();
+    brushManager.activeEffects.clear();
+    layer.draw();
+    
+    // Clear global
+    socket.emit('clearCanvas');
+    socket.emit('adminResetBrushEffects');
+    
+    showAdminNotification('Reset COMPLET Global 🧼✨');
+  }
 });
 
 // Export PNG PREMIUM
@@ -1274,4 +1322,8 @@ console.log('✅ PREMIUM Admin.js loaded for chantilly interface with ULTRA HIGH
 console.log('🎯 PREMIUM BrushManager status: Ready with viewport culling + premium monitoring');
 console.log('📍 Only effects in visible area + 25% margin will be rendered with maximum quality');
 console.log('🎨 PREMIUM Features: 10+ particles, 2500-4500ms duration, ultra complex animations!');
-console.log('👑 ADMIN POWERS: Global clear (Ctrl+Shift+C), Global brush reset (Ctrl+Shift+R), Global undo (Ctrl+Z)');
+console.log('👑 ADMIN POWERS:');
+console.log('   • Global undo: Ctrl+Z');
+console.log('   • Clear drawings only: Ctrl+Shift+C');
+console.log('   • Reset effects only: Ctrl+Shift+E ou bouton ✨');
+console.log('   • Reset COMPLET (dessins + effets): Ctrl+Shift+R ou bouton 🧼');
