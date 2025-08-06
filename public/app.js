@@ -1,4 +1,4 @@
-// public/app.js - Version simplifiée pour interface index
+// public/app.js - Version avec support des tracés permanents
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -12,12 +12,25 @@ stage.add(layer);
 const brushManager = new BrushManager(layer, socket);
 
 let currentTool  = 'brush';
-let currentColor = document.querySelector('.color-btn.active').dataset.color;
+let currentColor = '#FF5252'; // Couleur par défaut
 let currentSize  = parseInt(document.getElementById('size-slider').value, 10);
 let isDrawing    = false;
 let lastLine;
 let currentId;
 let lastPanPos = null;
+
+// Fonction globale pour changer la couleur (utilisée par le dropdown mobile)
+window.setCurrentColor = function(color) {
+  currentColor = color;
+  
+  // Mettre à jour aussi les couleurs desktop si visibles
+  document.querySelectorAll('.colors > .color-btn').forEach(btn => {
+    btn.classList.remove('active');
+    if (btn.dataset.color === color) {
+      btn.classList.add('active');
+    }
+  });
+};
 
 // === UTILITAIRES ===
 function throttle(func, wait) {
@@ -64,7 +77,7 @@ const emitTextureThrottled = throttle((data) => {
   socket.emit('texture', data);
 }, 150);
 
-// === INTERFACE UTILISATEUR SIMPLIFIÉE ===
+// === INTERFACE UTILISATEUR ===
 
 // Tool buttons
 document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -114,12 +127,19 @@ function showUndoNotification() {
   }, 800);
 }
 
-// Color selection
-document.querySelectorAll('.color-btn').forEach(btn => {
+// Color selection - Interface desktop normale
+document.querySelectorAll('.colors > .color-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.color-btn').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.colors > .color-btn').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
     currentColor = btn.dataset.color;
+    
+    // Mettre à jour le dropdown mobile aussi
+    const currentColorDisplay = document.querySelector('.current-color');
+    if (currentColorDisplay) {
+      currentColorDisplay.style.backgroundColor = currentColor;
+      currentColorDisplay.dataset.color = currentColor;
+    }
   });
 });
 
@@ -136,7 +156,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// === ÉVÉNEMENTS DE DESSIN SIMPLIFIÉS ===
+// === ÉVÉNEMENTS DE DESSIN ===
 
 stage.on('mousedown touchstart pointerdown', (evt) => {
   const pointer = stage.getPointerPosition();
@@ -144,6 +164,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   if (currentTool === 'pan') {
     lastPanPos = pointer;
     isDrawing = false;
+    stage.container().style.cursor = 'grabbing'; // Feedback visuel
     return;
   }
   
@@ -164,8 +185,8 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     return;
   }
 
-  // BRUSH ANIMÉS - Utilisation du BrushManager unifié
-  if (['neon', 'fire', 'sparkles', 'watercolor'].includes(currentTool)) {
+  // BRUSH ANIMÉS - Avec tracés permanents via BrushManager
+  if (['neon', 'fire', 'sparkles', 'watercolor', 'electric', 'petals'].includes(currentTool)) {
     isDrawing = true;
     currentId = generateId();
     brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
@@ -226,8 +247,8 @@ stage.on('mousemove touchmove pointermove', (evt) => {
     return;
   }
 
-  // BRUSH ANIMÉS - Continuer l'effet avec BrushManager unifié
-  if (['neon', 'fire', 'sparkles', 'watercolor'].includes(currentTool)) {
+  // BRUSH ANIMÉS - Continuer l'effet avec tracés permanents
+  if (['neon', 'fire', 'sparkles', 'watercolor', 'electric', 'petals'].includes(currentTool)) {
     brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
@@ -251,6 +272,7 @@ stage.on('mousemove touchmove pointermove', (evt) => {
 stage.on('mouseup touchend pointerup', () => {
   if (currentTool === 'pan') {
     lastPanPos = null;
+    stage.container().style.cursor = 'grab'; // Retour curseur normal pan
     return;
   }
 
@@ -258,7 +280,7 @@ stage.on('mouseup touchend pointerup', () => {
   isDrawing = false;
   
   // Les brush animés et texture n'ont pas besoin d'événement final
-  if (currentTool === 'texture' || ['neon', 'fire', 'sparkles', 'watercolor'].includes(currentTool)) {
+  if (currentTool === 'texture' || ['neon', 'fire', 'sparkles', 'watercolor', 'electric', 'petals'].includes(currentTool)) {
     return;
   }
   
@@ -299,7 +321,6 @@ function createTextureEffect(x, y, color, size) {
 
 // === SOCKET LISTENERS ===
 
-// Initialize existing shapes on load
 socket.on('initShapes', shapes => {
   shapes.forEach(data => {
     const line = new Konva.Line({
@@ -316,17 +337,14 @@ socket.on('initShapes', shapes => {
   layer.draw();
 });
 
-// Écouter les brush effects des autres utilisateurs
 socket.on('brushEffect', (data) => {
   brushManager.createNetworkEffect(data);
 });
 
-// Nettoyage des effets d'un utilisateur déconnecté
 socket.on('cleanupUserEffects', (data) => {
   brushManager.cleanupUserEffects(data.socketId);
 });
 
-// Socket listeners existants
 socket.on('drawing', data => {
   let shape = layer.findOne('#' + data.id);
   if (shape) {
@@ -381,15 +399,16 @@ socket.on('deleteShape', ({ id }) => {
   }
 });
 
+// MODIFIÉ : Clear canvas avec tracés permanents
 socket.on('clearCanvas', () => {
   layer.destroyChildren();
-  brushManager.clearAllEffects();
+  brushManager.clearEverything(); // Utilise la nouvelle méthode complète
   layer.draw();
 });
 
 socket.on('restoreShapes', (shapes) => {
   layer.destroyChildren();
-  brushManager.clearAllEffects();
+  brushManager.clearEverything(); // Utilise la nouvelle méthode complète
   
   shapes.forEach(data => {
     const line = new Konva.Line({
@@ -430,14 +449,14 @@ socket.on('shapeCreate', data => {
   }
 });
 
-// Reset des brush effects par admin
+// Reset des brush effects par admin (garde les tracés permanents)
 socket.on('adminResetBrushEffects', () => {
-  brushManager.clearAllEffects();
+  brushManager.clearAllEffects(); // Ne supprime que les effets temporaires
   showUndoNotification('Effets réinitialisés ✨');
-  console.log('🎨 Admin reset: All brush effects cleared');
+  console.log('🎨 Admin reset: Temporary effects cleared, permanent traces kept');
 });
 
 // Initialisation du curseur
 updateCursor();
 
-console.log('✅ Simplified Index App.js loaded with unified BrushManager');
+console.log('✅ App.js with permanent traces loaded');

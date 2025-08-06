@@ -1,16 +1,16 @@
-// public/brushManager.js - Système unifié et simplifié
+// public/brushManager.js - Système unifié avec tracés permanents
 class BrushManager {
   constructor(layer, socket = null) {
     this.layer = layer;
     this.socket = socket;
     this.activeEffects = new Map();
     this.lastEmit = 0;
-    this.throttleTime = 200; // Unifié - léger sur la bande passante
+    this.throttleTime = 200;
     
     // Nettoyage automatique toutes les 30 secondes
     this.cleanupInterval = setInterval(() => this.cleanup(), 30000);
     
-    console.log('✅ Unified BrushManager initialized');
+    console.log('✅ Unified BrushManager with permanent traces initialized');
   }
 
   // Méthode publique pour créer et émettre un effet
@@ -37,10 +37,14 @@ class BrushManager {
     this.createLocalEffect(data.type, data.x, data.y, data.color, data.size);
   }
 
-  // Création d'effet local unifié
+  // Création d'effet local unifié avec tracé permanent
   createLocalEffect(type, x, y, color, size) {
     const effectId = `effect_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     
+    // 1. CRÉER LE TRACÉ PERMANENT D'ABORD
+    this.createPermanentTrace(type, x, y, color, size);
+    
+    // 2. CRÉER L'EFFET TEMPORAIRE ANIMÉ
     switch(type) {
       case 'sparkles': 
         this.createSparkles(x, y, color, size, effectId); 
@@ -63,11 +67,219 @@ class BrushManager {
     }
   }
 
-  // === EFFETS UNIFIÉS (configuration simple pour tous) ===
+  // === NOUVEAU : CRÉATION DES TRACÉS PERMANENTS ===
+  
+  createPermanentTrace(type, x, y, color, size) {
+    const traceElements = [];
+    
+    switch(type) {
+      case 'sparkles':
+        traceElements.push(...this.createSparklesTrace(x, y, color, size));
+        break;
+      case 'neon':
+        traceElements.push(...this.createNeonTrace(x, y, color, size));
+        break;
+      case 'watercolor':
+        traceElements.push(...this.createWatercolorTrace(x, y, color, size));
+        break;
+      case 'electric':
+        traceElements.push(...this.createElectricTrace(x, y, color, size));
+        break;
+      case 'fire':
+        traceElements.push(...this.createFireTrace(x, y, color, size));
+        break;
+      case 'petals':
+        traceElements.push(...this.createPetalsTrace(x, y, color, size));
+        break;
+    }
+    
+    // Ajouter tous les éléments permanents à la layer
+    traceElements.forEach(element => {
+      this.layer.add(element);
+    });
+  }
+
+  // Tracé permanent pour Sparkles - Petites étoiles subtiles
+  createSparklesTrace(x, y, color, size) {
+    const traces = [];
+    const particleCount = 2;
+    
+    for (let i = 0; i < particleCount; i++) {
+      const offsetX = (Math.random() - 0.5) * size * 1.5;
+      const offsetY = (Math.random() - 0.5) * size * 1.5;
+      const starSize = 1 + Math.random() * 2;
+      
+      const trace = new Konva.Star({
+        x: x + offsetX,
+        y: y + offsetY,
+        numPoints: 4,
+        innerRadius: starSize * 0.3,
+        outerRadius: starSize,
+        fill: color,
+        opacity: 0.3 + Math.random() * 0.2,
+        rotation: Math.random() * 360,
+        isPermanentTrace: true
+      });
+      
+      traces.push(trace);
+    }
+    
+    return traces;
+  }
+
+  // Tracé permanent pour Neon - Dots lumineux
+  createNeonTrace(x, y, color, size) {
+    const traces = [];
+    const dotCount = 3;
+    
+    for (let i = 0; i < dotCount; i++) {
+      const offsetX = (Math.random() - 0.5) * size;
+      const offsetY = (Math.random() - 0.5) * size;
+      const dotSize = 0.8 + Math.random() * 1.5;
+      
+      const trace = new Konva.Circle({
+        x: x + offsetX,
+        y: y + offsetY,
+        radius: dotSize,
+        fill: color,
+        opacity: 0.4 + Math.random() * 0.3,
+        shadowColor: color,
+        shadowBlur: 3,
+        shadowOpacity: 0.3,
+        isPermanentTrace: true
+      });
+      
+      traces.push(trace);
+    }
+    
+    return traces;
+  }
+
+  // Tracé permanent pour Watercolor - Taches légères
+  createWatercolorTrace(x, y, color, size) {
+    const traces = [];
+    const blobCount = 2;
+    
+    for (let i = 0; i < blobCount; i++) {
+      const offsetX = (Math.random() - 0.5) * size * 0.8;
+      const offsetY = (Math.random() - 0.5) * size * 0.8;
+      const blobSize = size * (0.3 + Math.random() * 0.4);
+      
+      const trace = new Konva.Circle({
+        x: x + offsetX,
+        y: y + offsetY,
+        radius: blobSize,
+        fill: color,
+        opacity: 0.15 + Math.random() * 0.15,
+        scaleX: 0.6 + Math.random() * 0.8,
+        scaleY: 0.4 + Math.random() * 0.6,
+        isPermanentTrace: true
+      });
+      
+      traces.push(trace);
+    }
+    
+    return traces;
+  }
+
+  // Tracé permanent pour Electric - Lignes zigzag subtiles
+  createElectricTrace(x, y, color, size) {
+    const traces = [];
+    const lineCount = 1;
+    
+    for (let i = 0; i < lineCount; i++) {
+      const points = [];
+      const segments = 3;
+      let currentX = x;
+      let currentY = y;
+      
+      points.push(currentX, currentY);
+      
+      for (let j = 0; j < segments; j++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = size * (0.3 + Math.random() * 0.4);
+        currentX += Math.cos(angle) * distance;
+        currentY += Math.sin(angle) * distance;
+        points.push(currentX, currentY);
+      }
+      
+      const trace = new Konva.Line({
+        points: points,
+        stroke: color,
+        strokeWidth: 0.8 + Math.random() * 0.7,
+        opacity: 0.25 + Math.random() * 0.2,
+        lineCap: 'round',
+        lineJoin: 'round',
+        isPermanentTrace: true
+      });
+      
+      traces.push(trace);
+    }
+    
+    return traces;
+  }
+
+  // Tracé permanent pour Fire - Formes flame subtiles
+  createFireTrace(x, y, color, size) {
+    const traces = [];
+    const flameCount = 2;
+    
+    for (let i = 0; i < flameCount; i++) {
+      const offsetX = (Math.random() - 0.5) * size * 0.6;
+      const offsetY = (Math.random() - 0.5) * size * 0.4;
+      const flameSize = size * (0.2 + Math.random() * 0.3);
+      
+      const trace = new Konva.Ellipse({
+        x: x + offsetX,
+        y: y + offsetY,
+        radiusX: flameSize * 0.6,
+        radiusY: flameSize,
+        fill: color,
+        opacity: 0.2 + Math.random() * 0.15,
+        rotation: Math.random() * 45 - 22.5,
+        isPermanentTrace: true
+      });
+      
+      traces.push(trace);
+    }
+    
+    return traces;
+  }
+
+  // Tracé permanent pour Petals - Pétales légers
+  createPetalsTrace(x, y, color, size) {
+    const traces = [];
+    const petalCount = 2;
+    
+    for (let i = 0; i < petalCount; i++) {
+      const offsetX = (Math.random() - 0.5) * size;
+      const offsetY = (Math.random() - 0.5) * size;
+      const petalSize = size * (0.25 + Math.random() * 0.3);
+      
+      const trace = new Konva.Ellipse({
+        x: x + offsetX,
+        y: y + offsetY,
+        radiusX: petalSize,
+        radiusY: petalSize * 0.5,
+        fill: color,
+        opacity: 0.2 + Math.random() * 0.2,
+        rotation: Math.random() * 360,
+        scaleX: 0.6 + Math.random() * 0.6,
+        scaleY: 0.4 + Math.random() * 0.8,
+        isPermanentTrace: true
+      });
+      
+      traces.push(trace);
+    }
+    
+    return traces;
+  }
+
+  // === EFFETS TEMPORAIRES ANIMÉS (inchangés) ===
   
   createSparkles(x, y, color, size, effectId) {
     const elements = [];
-    const particles = 4; // Unifié
+    const particles = 4;
     const duration = 1200;
     
     for (let i = 0; i < particles; i++) {
@@ -84,13 +296,13 @@ class BrushManager {
         fill: color, 
         rotation: Math.random() * 360,
         opacity: 1.0,
-        effectId
+        effectId,
+        isTemporaryEffect: true
       });
       
       this.layer.add(sparkle);
       elements.push(sparkle);
       
-      // Animation simple
       this.animateSparkle(sparkle, duration, i);
     }
     
@@ -116,7 +328,8 @@ class BrushManager {
         shadowColor: color, 
         shadowBlur: 15, 
         shadowOpacity: 0.8,
-        effectId
+        effectId,
+        isTemporaryEffect: true
       });
       
       this.layer.add(particle);
@@ -146,7 +359,8 @@ class BrushManager {
         opacity: 0.5,
         scaleX: 0.8 + Math.random() * 0.6, 
         scaleY: 0.6 + Math.random() * 0.6,
-        effectId
+        effectId,
+        isTemporaryEffect: true
       });
       
       this.layer.add(drop);
@@ -178,7 +392,8 @@ class BrushManager {
         shadowOpacity: 0.8,
         effectId,
         originalPoints: [...points], 
-        animationOffset: Math.random() * Math.PI * 2
+        animationOffset: Math.random() * Math.PI * 2,
+        isTemporaryEffect: true
       });
       
       this.layer.add(bolt);
@@ -209,7 +424,8 @@ class BrushManager {
         shadowColor: '#FF4500', 
         shadowBlur: 16, 
         shadowOpacity: 0.7,
-        effectId
+        effectId,
+        isTemporaryEffect: true
       });
       
       this.layer.add(flame);
@@ -241,7 +457,8 @@ class BrushManager {
         rotation: Math.random() * 360,
         scaleX: 0.8 + Math.random() * 0.6, 
         scaleY: 0.6 + Math.random() * 0.6,
-        effectId
+        effectId,
+        isTemporaryEffect: true
       });
       
       this.layer.add(petal);
@@ -253,7 +470,7 @@ class BrushManager {
     this.trackEffect(effectId, elements, duration);
   }
 
-  // === ANIMATIONS SIMPLIFIÉES ===
+  // === ANIMATIONS (inchangées) ===
 
   animateSparkle(sparkle, duration, index) {
     const animation = new Konva.Animation((frame) => {
@@ -315,7 +532,6 @@ class BrushManager {
       const glow = 10 + Math.sin(frame.time * 0.04 + index) * 8;
       const opacity = Math.max(0, 0.9 - progress * 0.6);
       
-      // Déformation simple du tracé
       const deformedPoints = [];
       for (let i = 0; i < originalPoints.length; i += 2) {
         const x = originalPoints[i];
@@ -374,7 +590,7 @@ class BrushManager {
     animation.start();
   }
 
-  // === UTILITAIRES ===
+  // === UTILITAIRES (inchangés) ===
 
   generateElectricPath(startX, startY, size, segments) {
     const points = [startX, startY];
@@ -404,7 +620,6 @@ class BrushManager {
       duration 
     });
     
-    // Auto-cleanup après la durée + marge
     setTimeout(() => this.removeEffect(effectId), duration + 2000);
     this.layer.batchDraw();
   }
@@ -421,7 +636,6 @@ class BrushManager {
     }
   }
 
-  // Nettoyage automatique
   cleanup() {
     const now = Date.now();
     const expired = [];
@@ -440,27 +654,50 @@ class BrushManager {
     }
   }
 
-  // Nettoyage complet des effets
+  // Nettoyage complet des effets (garde les tracés permanents)
   clearAllEffects() {
+    // Ne supprimer que les effets temporaires
     this.activeEffects.forEach((effect, effectId) => {
       this.removeEffect(effectId);
     });
     this.activeEffects.clear();
+    
+    // Supprimer tous les éléments temporaires du layer
+    const allChildren = this.layer.getChildren().toArray();
+    allChildren.forEach(child => {
+      if (child.isTemporaryEffect) {
+        child.destroy();
+      }
+    });
+    
     this.layer.batchDraw();
-    console.log('🧹 BrushManager: All effects cleared');
+    console.log('🧹 BrushManager: All temporary effects cleared, permanent traces kept');
   }
 
-  // Nettoyage pour utilisateur déconnecté
+  // Suppression complète incluant les tracés (pour clear canvas)
+  clearEverything() {
+    this.clearAllEffects();
+    
+    // Supprimer aussi les tracés permanents
+    const allChildren = this.layer.getChildren().toArray();
+    allChildren.forEach(child => {
+      if (child.isPermanentTrace) {
+        child.destroy();
+      }
+    });
+    
+    this.layer.batchDraw();
+    console.log('🧹 BrushManager: Everything cleared including permanent traces');
+  }
+
   cleanupUserEffects(socketId) {
     // Simplifié - on nettoie tout car pas de tracking par user
-    // dans cette version simplifiée
   }
 
-  // Destruction propre
   destroy() {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
     }
-    this.clearAllEffects();
+    this.clearEverything();
   }
 }

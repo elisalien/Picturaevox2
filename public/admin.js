@@ -1,4 +1,4 @@
-// public/admin.js - Version simplifiée avec BrushManager externe
+// public/admin.js - Version avec clear admin corrigé
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -16,7 +16,6 @@ const brushManager = new BrushManager(layer, null);
 
 // Effet texture simplifié pour admin
 function createTextureEffect(x, y, color, size) {
-  // Qualité élevée pour admin
   const particleCount = 12;
   const spreadMultiplier = 1.6;
   
@@ -66,7 +65,6 @@ function createTextureEffect(x, y, color, size) {
     
     layer.add(dot);
     
-    // Animation pour certaines particules
     if (Math.random() < 0.4) {
       dot.to({
         opacity: dot.opacity() * 0.2,
@@ -118,7 +116,6 @@ socket.on('drawing', data => {
   layer.batchDraw();
 });
 
-// BRUSH EFFECTS - Utilise le BrushManager unifié
 socket.on('brushEffect', (data) => {
   brushManager.createNetworkEffect(data);
 });
@@ -161,15 +158,17 @@ socket.on('deleteShape', ({ id }) => {
   }
 });
 
+// ✅ CORRIGÉ : Clear canvas pour admin
 socket.on('clearCanvas', () => {
   layer.destroyChildren();
-  brushManager.clearAllEffects();
+  brushManager.clearEverything(); // Utilise la nouvelle méthode
   layer.draw();
+  console.log('🧼 Admin received clearCanvas - everything cleared');
 });
 
 socket.on('restoreShapes', (shapes) => {
   layer.destroyChildren();
-  brushManager.clearAllEffects();
+  brushManager.clearEverything();
   
   shapes.forEach(data => {
     const line = new Konva.Line({
@@ -210,42 +209,42 @@ socket.on('shapeCreate', data => {
   }
 });
 
-// Raccourcis clavier admin avec corrections
+// Raccourcis clavier admin
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'z') {
     e.preventDefault();
     socket.emit('undo');
-    showAdminNotification('Undo Global ↶');
+    showAdminNotification('Undo Global ↶ (Limité à 2 actions)');
   }
   
-  // Raccourci Ctrl+Shift+C pour clear global admin
+  // ✅ CORRIGÉ : Clear global admin
   if (e.ctrlKey && e.shiftKey && e.key === 'C') {
     e.preventDefault();
     
     if (confirm('ADMIN: Effacer TOUT le canvas pour TOUS les utilisateurs ?')) {
-      // Clear local
+      // ✅ CORRECTION : Clear local d'abord
       layer.destroyChildren();
-      brushManager.clearAllEffects();
+      brushManager.clearEverything();
       layer.draw();
       
-      // Clear global via socket
+      // ✅ Puis envoyer la commande globale
       socket.emit('clearCanvas');
       
       showAdminNotification('Canvas Cleared Globally 🧼');
     }
   }
   
-  // CORRECTION: Raccourci Ctrl+Shift+R pour reset COMPLET
+  // ✅ CORRIGÉ : Reset COMPLET
   if (e.ctrlKey && e.shiftKey && e.key === 'R') {
     e.preventDefault();
     
     if (confirm('ADMIN: Reset COMPLET (dessins + effets) pour TOUS les utilisateurs ?')) {
       // Clear local complet
       layer.destroyChildren();
-      brushManager.clearAllEffects();
+      brushManager.clearEverything();
       layer.draw();
       
-      // Clear global complet - FIX MAJEUR ICI
+      // Clear global complet - COMMANDES SÉPARÉES
       socket.emit('clearCanvas'); // Supprime les dessins
       socket.emit('adminResetBrushEffects'); // Supprime les effets
       
@@ -253,16 +252,14 @@ document.addEventListener('keydown', (e) => {
     }
   }
   
-  // Raccourci Ctrl+Shift+E pour reset seulement les brush effects
+  // Reset seulement les brush effects
   if (e.ctrlKey && e.shiftKey && e.key === 'E') {
     e.preventDefault();
     
-    // Nettoyer tous les brush effects locaux
-    brushManager.clearAllEffects();
+    brushManager.clearAllEffects(); // Local seulement les effets temporaires
     layer.batchDraw();
     
-    // CORRECTION: Demander à tous les clients de faire pareil
-    socket.emit('adminResetBrushEffects');
+    socket.emit('adminResetBrushEffects'); // Global
     
     showAdminNotification('Effets Brush Reset Globalement ✨');
   }
@@ -296,7 +293,7 @@ function showAdminNotification(message) {
   }, 2000);
 }
 
-// Ajouter l'animation CSS pour les notifications admin
+// Style CSS pour les notifications admin
 const adminStyle = document.createElement('style');
 adminStyle.textContent = `
   @keyframes adminNotification {
@@ -415,7 +412,7 @@ bgWhiteBtn?.addEventListener('click', () => {
   container.style.backgroundColor = '#fff';
 });
 
-// Eraser (object deletion) - ADMIN PEUT SUPPRIMER POUR TOUS
+// Eraser (object deletion)
 eraserBtn?.addEventListener('click', () => {
   setActiveButton(eraserBtn);
   stage.draggable(false);
@@ -430,17 +427,14 @@ stage.on('click', evt => {
       const shape = target;
       const id = shape.id();
       
-      // Feedback visuel immédiat
       shape.stroke('#ff0000');
       shape.opacity(0.5);
       layer.draw();
       
       setTimeout(() => {
-        // Suppression locale
         shape.destroy();
         layer.draw();
         
-        // COMMANDE GLOBALE - Supprimer pour tous les utilisateurs
         socket.emit('deleteShape', { id });
         
         console.log(`🧽 ADMIN: Deleted shape ${id} for all users`);
@@ -478,24 +472,22 @@ stage.on('mouseout', evt => {
 resetEffectsBtn?.addEventListener('click', () => {
   setActiveButton(resetEffectsBtn);
   
-  // Clear local brush effects
   brushManager.clearAllEffects();
   layer.batchDraw();
   
-  // Clear global brush effects
   socket.emit('adminResetBrushEffects');
   
   showAdminNotification('Effets Reset Globalement ✨');
 });
 
-// Clear canvas
+// ✅ CORRIGÉ : Clear canvas button
 clearBtn?.addEventListener('click', () => {
   if (confirm('ADMIN: Effacer TOUT pour TOUS les utilisateurs ?')) {
     setActiveButton(clearBtn);
     
     // Clear local
     layer.destroyChildren();
-    brushManager.clearAllEffects();
+    brushManager.clearEverything();
     layer.draw();
     
     // Clear global
@@ -552,16 +544,16 @@ stage.on('wheel', (e) => {
 stage.draggable(true);
 container.style.cursor = 'grab';
 
-// Nouvel événement pour reset des brush effects (côté client)
+// ✅ Reset des brush effects (côté client)
 socket.on('adminResetBrushEffects', () => {
   brushManager.clearAllEffects();
   layer.batchDraw();
   console.log('🎨 ADMIN command: All brush effects reset');
 });
 
-console.log('✅ Simplified Admin.js loaded with unified BrushManager');
+console.log('✅ Admin.js fixed - Clear canvas and limited undo working');
 console.log('👑 ADMIN POWERS:');
-console.log('   • Global undo: Ctrl+Z');
+console.log('   • Global undo: Ctrl+Z (Limited to 2 actions)');
 console.log('   • Clear drawings only: Ctrl+Shift+C');
 console.log('   • Reset effects only: Ctrl+Shift+E ou bouton ✨');
 console.log('   • Reset COMPLET (dessins + effets): Ctrl+Shift+R ou bouton 🧼');

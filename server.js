@@ -1,30 +1,29 @@
-// server.js
-require('dotenv').config(); // Assure-toi d'avoir dotenv installé
+// server.js - Version avec historique limité et clear admin corrigé
+require('dotenv').config();
 
 const express = require('express');
 const app = express();
 const path = require('path');
 const http = require('http').Server(app);
 const io = require('socket.io')(http, {
-  // Configuration pour Railway et autres hébergeurs
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
   },
-  transports: ['websocket', 'polling'], // Support fallback
+  transports: ['websocket', 'polling'],
   allowEIO3: true
 });
 
 // In-memory store for shapes
 const shapes = {};
-// Historique des actions (max 2)
+// Historique des actions (RÉDUIT À 2 pour optimisation)
 const actionHistory = [];
-const MAX_HISTORY = 2;
+const MAX_HISTORY = 2; // ✅ LIMITÉ À 2 ACTIONS
 
 // Optimisations performance
-const MAX_SHAPES = 500; // Limite globale de formes
-const CLEANUP_INTERVAL = 60000; // Nettoyage toutes les minutes
-const SHAPE_TTL = 300000; // TTL des formes : 5 minutes
+const MAX_SHAPES = 500;
+const CLEANUP_INTERVAL = 60000;
+const SHAPE_TTL = 300000;
 
 // Ajouter timestamp aux formes
 function addTimestampToShape(shapeData) {
@@ -39,7 +38,6 @@ function cleanupOldShapes() {
   const now = Date.now();
   const shapeIds = Object.keys(shapes);
   
-  // Si on dépasse la limite, supprimer les plus anciennes
   if (shapeIds.length > MAX_SHAPES) {
     const sortedShapes = shapeIds
       .map(id => ({ id, timestamp: shapes[id].timestamp || 0 }))
@@ -53,7 +51,6 @@ function cleanupOldShapes() {
     console.log(`Cleaned up ${toDelete.length} old shapes`);
   }
   
-  // Supprimer les formes trop anciennes
   const expired = shapeIds.filter(id => {
     const shape = shapes[id];
     return shape.timestamp && (now - shape.timestamp) > SHAPE_TTL;
@@ -66,28 +63,24 @@ function cleanupOldShapes() {
   }
 }
 
-// Lancer le nettoyage périodique
 setInterval(cleanupOldShapes, CLEANUP_INTERVAL);
 
 // Servir les fichiers statiques
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Route pour l'admin
+// Routes
 app.get('/chantilly', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Route pour l'atelier artiste
 app.get('/atelier', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'atelier.html'));
 });
 
-// Route principale
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Route de santé pour Railway
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
@@ -98,32 +91,26 @@ io.on('connection', socket => {
   // Send existing shapes to this client
   socket.emit('initShapes', Object.values(shapes));
 
-  // Broadcast streaming drawing data (optimisé)
+  // Broadcast streaming drawing data
   socket.on('drawing', data => {
-    // Optimisation : ne pas stocker les données de streaming
     socket.broadcast.emit('drawing', data);
   });
 
-  // Broadcast texture brush data (optimisé)
+  // Broadcast texture brush data
   socket.on('texture', data => {
-    // Throttling côté serveur pour réduire la charge réseau
     if (!socket.lastTextureTime || Date.now() - socket.lastTextureTime > 100) {
       socket.broadcast.emit('texture', data);
       socket.lastTextureTime = Date.now();
     }
   });
 
-  // === NOUVEAUX ÉVÉNEMENTS BRUSH ANIMÉS ===
-  
-  // Gestion des brush effects avec throttling serveur agressif
+  // Gestion des brush effects
   socket.on('brushEffect', data => {
     const now = Date.now();
-    // Throttling serveur adaptatif selon l'interface
     const throttleTime = data.interface === 'admin' ? 100 : 
                         data.interface === 'atelier' ? 150 : 250;
     
     if (!socket.lastBrushEffect || (now - socket.lastBrushEffect) >= throttleTime) {
-      // Broadcaster à tous les autres clients avec métadonnées serveur
       socket.broadcast.emit('brushEffect', {
         ...data,
         socketId: socket.id,
@@ -133,15 +120,12 @@ io.on('connection', socket => {
     }
   });
 
-  // Nettoyage des effets d'un utilisateur spécifique (optimisation)
   socket.on('cleanupUserEffects', ({ userId }) => {
     socket.broadcast.emit('cleanupUserEffects', { 
       socketId: socket.id, 
       userId 
     });
   });
-
-  // === FIN NOUVEAUX ÉVÉNEMENTS ===
 
   // Création de formes prédéfinies
   socket.on('shapeCreate', data => {
@@ -150,9 +134,8 @@ io.on('connection', socket => {
     socket.broadcast.emit('shapeCreate', data);
   });
 
-  // Final draw event, update store and broadcast
+  // Final draw event
   socket.on('draw', data => {
-    // Ajouter timestamp et limiter les points si nécessaire
     const optimizedData = {
       ...data,
       points: data.points.length > 200 ? simplifyPoints(data.points, 100) : data.points
@@ -160,7 +143,7 @@ io.on('connection', socket => {
     
     const shapeWithTimestamp = addTimestampToShape(optimizedData);
     
-    // Ajouter à l'historique
+    // Ajouter à l'historique (LIMITÉ À 2)
     addToHistory({
       type: 'draw',
       action: 'add',
@@ -171,11 +154,10 @@ io.on('connection', socket => {
     socket.broadcast.emit('draw', optimizedData);
   });
 
-  // Shape deletion, update store and broadcast
+  // Shape deletion
   socket.on('deleteShape', ({ id }) => {
     console.log('🧽 Delete shape command:', id);
     
-    // Sauvegarder la forme avant suppression pour undo
     const deletedShape = shapes[id];
     if (deletedShape) {
       addToHistory({
@@ -186,10 +168,10 @@ io.on('connection', socket => {
     }
     
     delete shapes[id];
-    io.emit('deleteShape', { id }); // io.emit pour envoyer à TOUS (y compris l'expéditeur)
+    io.emit('deleteShape', { id });
   });
 
-  // Clear canvas, clear store and broadcast
+  // Clear canvas - ✅ CORRIGÉ POUR ADMIN
   socket.on('clearCanvas', () => {
     console.log('🧼 Clear canvas command - shapes before:', Object.keys(shapes).length);
     
@@ -201,68 +183,70 @@ io.on('connection', socket => {
       data: allShapes
     });
     
-    for (let id in shapes) delete shapes[id];
-    io.emit('clearCanvas'); // io.emit pour envoyer à TOUS
+    // ✅ CORRECTION MAJEURE : Vider le store shapes
+    for (let id in shapes) {
+      delete shapes[id];
+    }
+    
+    // ✅ CORRECTION : Envoyer à TOUS les clients (y compris admin)
+    io.emit('clearCanvas');
     
     console.log('🧼 Canvas cleared globally - shapes remaining:', Object.keys(shapes).length);
   });
 
-  // Undo action - Amélioré avec log
+  // Undo action - Limité à 2 actions
   socket.on('undo', () => {
     if (actionHistory.length > 0) {
       const lastAction = actionHistory.pop();
       
-      console.log('↶ Undo action performed:', lastAction.type);
+      console.log(`↶ Undo action performed: ${lastAction.type} (${actionHistory.length} actions remaining)`);
       
       switch (lastAction.type) {
         case 'draw':
-          // Supprimer la dernière forme dessinée
           delete shapes[lastAction.data.id];
           io.emit('deleteShape', { id: lastAction.data.id });
           break;
           
         case 'delete':
-          // Restaurer la forme supprimée
           shapes[lastAction.data.id] = lastAction.data;
           io.emit('draw', lastAction.data);
           break;
           
         case 'clear':
-          // Restaurer toutes les formes
           Object.assign(shapes, lastAction.data);
           io.emit('restoreShapes', Object.values(lastAction.data));
           break;
       }
+    } else {
+      console.log('↶ Undo requested but no actions in history');
     }
   });
 
-  // === NOUVEAU ÉVÉNEMENT ADMIN - Reset des brush effects globalement ===
+  // ✅ Reset des brush effects globalement - CORRIGÉ
   socket.on('adminResetBrushEffects', () => {
     console.log('👑 Admin command: Reset all brush effects globally');
     
-    // Broadcaster la commande à tous les clients (y compris l'admin)
+    // ✅ CORRECTION : Broadcaster à TOUS (y compris admin)
     io.emit('adminResetBrushEffects');
   });
 
   socket.on('disconnect', () => {
     console.log('user disconnected');
-    // Nettoyer les brush effects de cet utilisateur
     socket.broadcast.emit('cleanupUserEffects', { socketId: socket.id });
   });
 });
 
-// Fonction pour simplifier les points (réduction de données)
+// Fonction pour simplifier les points
 function simplifyPoints(points, maxPoints) {
-  if (points.length <= maxPoints * 2) return points; // Déjà assez simple
+  if (points.length <= maxPoints * 2) return points;
   
   const simplified = [];
-  const step = Math.floor(points.length / maxPoints / 2) * 2; // Garder les pairs pour x,y
+  const step = Math.floor(points.length / maxPoints / 2) * 2;
   
   for (let i = 0; i < points.length; i += step) {
     simplified.push(points[i], points[i + 1]);
   }
   
-  // Toujours garder le dernier point
   if (simplified.length < points.length) {
     simplified.push(points[points.length - 2], points[points.length - 1]);
   }
@@ -270,20 +254,22 @@ function simplifyPoints(points, maxPoints) {
   return simplified;
 }
 
-// Fonction pour ajouter à l'historique
+// ✅ Fonction d'historique LIMITÉE À 2 ACTIONS
 function addToHistory(action) {
   actionHistory.push(action);
   
-  // Garder seulement les 2 dernières actions
+  // ✅ OPTIMISATION : Garder seulement les 2 dernières actions
   if (actionHistory.length > MAX_HISTORY) {
     actionHistory.shift(); // Supprimer la plus ancienne
   }
+  
+  console.log(`📝 Action added to history: ${action.type} (${actionHistory.length}/${MAX_HISTORY})`);
 }
 
-// Le port DOIT être celui fourni par Railway
 const PORT = process.env.PORT || 3000;
 
 http.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`✅ Undo history limited to ${MAX_HISTORY} actions for better performance`);
 });
