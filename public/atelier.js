@@ -932,7 +932,15 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   if (['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
     isDrawing = true;
     currentId = generateId();
-    brushManager.createAndEmitEffect(currentTool, networkPos.x, networkPos.y, currentColor, pressureSize);
+    // Utiliser les coordonnées réseau pour l'émission mais les coordonnées locales pour l'affichage
+    brushManager.createLocalEffect(currentTool, localPos.x, localPos.y, currentColor, pressureSize);
+    if (socket) {
+      socket.emit('brushEffect', {
+        type: currentTool, x: networkPos.x, y: networkPos.y, color: currentColor, size: pressureSize,
+        interface: 'atelier',
+        timestamp: Date.now()
+      });
+    }
     return;
   }
 
@@ -1016,7 +1024,16 @@ stage.on('mousemove touchmove pointermove', (evt) => {
 
   // BRUSH ANIMÉS - Continuer l'effet
   if (['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
-    brushManager.createAndEmitEffect(currentTool, networkPos.x, networkPos.y, currentColor, pressureSize);
+    // Utiliser les coordonnées locales pour l'affichage local mais réseau pour l'émission
+    brushManager.createLocalEffect(currentTool, localPos.x, localPos.y, currentColor, pressureSize);
+    if (socket && Date.now() - brushManager.lastEmit >= brushManager.throttleTime) {
+      socket.emit('brushEffect', {
+        type: currentTool, x: networkPos.x, y: networkPos.y, color: currentColor, size: pressureSize,
+        interface: 'atelier',
+        timestamp: Date.now()
+      });
+      brushManager.lastEmit = Date.now();
+    }
     return;
   }
 
@@ -1126,6 +1143,7 @@ socket.on('drawing', data => {
     layer.add(shape);
   } else {
     shape.points(data.points);
+    shape.strokeWidth(data.strokeWidth);
   }
   layer.batchDraw();
 });
@@ -1149,7 +1167,7 @@ socket.on('draw', data => {
     shape.strokeWidth(data.strokeWidth);
     shape.globalCompositeOperation(data.globalCompositeOperation);
   } else {
-    layer.add(new Konva.Line({
+    const line = new Konva.Line({
       id: data.id,
       points: data.points,
       stroke: data.stroke,
@@ -1157,7 +1175,8 @@ socket.on('draw', data => {
       globalCompositeOperation: data.globalCompositeOperation,
       lineCap: 'round',
       lineJoin: 'round'
-    }));
+    });
+    layer.add(line);
   }
   layer.draw();
 });
