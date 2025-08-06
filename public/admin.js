@@ -187,12 +187,13 @@ socket.on('deleteShape', ({ id }) => {
   }
 });
 
-// ✅ CORRIGÉ : Clear canvas pour admin
+// ✅ CORRIGÉ : Clear canvas pour admin avec tracés permanents
 socket.on('clearCanvas', () => {
-  layer.destroyChildren();
-  brushManager.clearEverything(); // Utilise la nouvelle méthode
+  const childrenCount = layer.getChildren().length;
+  layer.destroyChildren(); // ✅ Supprime TOUT (y compris tracés permanents)
+  brushManager.clearEverything(); // ✅ Clear complet
   layer.draw();
-  console.log('🧼 Admin received clearCanvas - everything cleared');
+  console.log(`🧼 ADMIN received clearCanvas - ${childrenCount} elements cleared (including permanent traces)`);
 });
 
 socket.on('restoreShapes', (shapes) => {
@@ -200,18 +201,47 @@ socket.on('restoreShapes', (shapes) => {
   brushManager.clearEverything();
   
   shapes.forEach(data => {
-    const line = new Konva.Line({
-      id: data.id,
-      points: data.points,
-      stroke: data.stroke,
-      strokeWidth: data.strokeWidth,
-      globalCompositeOperation: data.globalCompositeOperation,
-      lineCap: 'round',
-      lineJoin: 'round'
-    });
-    layer.add(line);
+    if (data.type === 'permanentTrace') {
+      // ✅ Restaurer les tracés permanents
+      let element;
+      
+      switch(data.shapeType) {
+        case 'Star':
+          element = new Konva.Star(data.attrs);
+          break;
+        case 'Circle':
+          element = new Konva.Circle(data.attrs);
+          break;
+        case 'Line':
+          element = new Konva.Line(data.attrs);
+          break;
+        case 'Ellipse':
+          element = new Konva.Ellipse(data.attrs);
+          break;
+      }
+      
+      if (element) {
+        element.id(data.id);
+        element.isPermanentTrace = true;
+        layer.add(element);
+      }
+    } else {
+      // Restaurer tracé normal
+      const line = new Konva.Line({
+        id: data.id,
+        points: data.points,
+        stroke: data.stroke,
+        strokeWidth: data.strokeWidth,
+        globalCompositeOperation: data.globalCompositeOperation,
+        lineCap: 'round',
+        lineJoin: 'round'
+      });
+      layer.add(line);
+    }
   });
   layer.draw();
+  
+  console.log(`👑 ADMIN: Restored ${shapes.length} shapes after undo`);
 });
 
 socket.on('shapeCreate', data => {

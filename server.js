@@ -168,7 +168,7 @@ io.on('connection', socket => {
     socket.broadcast.emit('draw', optimizedData);
   });
 
-  // Shape deletion
+  // Shape deletion (incluant tracés permanents)
   socket.on('deleteShape', ({ id }) => {
     console.log('🧽 Delete shape command:', id);
     
@@ -183,13 +183,15 @@ io.on('connection', socket => {
     
     delete shapes[id];
     io.emit('deleteShape', { id });
+    
+    console.log(`🧽 Shape ${id} deleted globally (type: ${deletedShape?.type || 'normal'})`);
   });
 
-  // Clear canvas - ✅ CORRIGÉ POUR ADMIN
+  // Clear canvas - ✅ CORRIGÉ POUR ADMIN avec tracés permanents
   socket.on('clearCanvas', () => {
     console.log('🧼 Clear canvas command - shapes before:', Object.keys(shapes).length);
     
-    // Sauvegarder toutes les formes pour undo
+    // Sauvegarder toutes les formes pour undo (incluant tracés permanents)
     const allShapes = { ...shapes };
     addToHistory({
       type: 'clear',
@@ -197,7 +199,7 @@ io.on('connection', socket => {
       data: allShapes
     });
     
-    // ✅ CORRECTION MAJEURE : Vider le store shapes
+    // ✅ CORRECTION MAJEURE : Vider TOUT le store shapes (incluant tracés permanents)
     for (let id in shapes) {
       delete shapes[id];
     }
@@ -205,7 +207,7 @@ io.on('connection', socket => {
     // ✅ CORRECTION : Envoyer à TOUS les clients (y compris admin)
     io.emit('clearCanvas');
     
-    console.log('🧼 Canvas cleared globally - shapes remaining:', Object.keys(shapes).length);
+    console.log('🧼 Canvas cleared globally (including permanent traces) - shapes remaining:', Object.keys(shapes).length);
   });
 
   // Undo action - Limité à 2 actions

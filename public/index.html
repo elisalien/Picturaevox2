@@ -5,6 +5,188 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Picturævox – Dessin collaboratif</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* INTERFACE MOBILE ULTRA ÉPURÉE - INDEX SEULEMENT */
+    
+    /* Menu déroulant pour les couleurs sur mobile */
+    @media (max-width: 768px) {
+      .colors {
+        position: relative;
+      }
+      
+      .color-selector {
+        display: none; /* Caché par défaut sur desktop */
+      }
+      
+      .color-dropdown {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+      
+      .current-color {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 2px solid white;
+        cursor: pointer;
+        position: relative;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      }
+      
+      .current-color::after {
+        content: '▼';
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+        font-size: 8px;
+        color: white;
+        background: rgba(0,0,0,0.7);
+        border-radius: 50%;
+        width: 12px;
+        height: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      .color-palette {
+        position: absolute;
+        bottom: 45px;
+        right: 0;
+        background: rgba(20, 20, 20, 0.98);
+        border-radius: 8px;
+        padding: 8px;
+        display: none;
+        gap: 4px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        z-index: 2000;
+      }
+      
+      .color-palette.show {
+        display: flex;
+      }
+      
+      .color-palette .color-btn {
+        width: 28px;
+        height: 28px;
+        border: 1px solid #555;
+        margin: 0;
+      }
+      
+      /* Masquer les couleurs normales sur mobile */
+      .colors .color-btn:not(.current-color) {
+        display: none;
+      }
+      
+      /* Interface encore plus compacte */
+      .toolbar {
+        padding: 3px 5px;
+        gap: 4px;
+        min-height: 38px;
+      }
+      
+      .tool-btn {
+        min-width: 30px;
+        min-height: 30px;
+        font-size: 14px;
+        border-radius: 6px;
+      }
+      
+      .tools {
+        gap: 2px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        padding: 0 2px;
+      }
+      
+      .tools::-webkit-scrollbar {
+        display: none;
+      }
+      
+      #size-slider {
+        width: 50px;
+        height: 30px;
+      }
+    }
+    
+    /* Très petits écrans - Cache certains outils SAUF gomme */
+    @media (max-width: 480px) {
+      /* Cache les outils moins essentiels MAIS garde la gomme */
+      #pan,
+      #watercolor,
+      #fire {
+        display: none;
+      }
+      
+      .toolbar {
+        padding: 2px 4px;
+        gap: 3px;
+        min-height: 36px;
+      }
+      
+      .tool-btn {
+        min-width: 28px;
+        min-height: 28px;
+        font-size: 13px;
+      }
+      
+      #size-slider {
+        width: 45px;
+      }
+    }
+    
+    /* iPhone SE et ultra petits écrans */
+    @media (max-width: 375px) {
+      /* Ne garde que l'essentiel + GOMME */
+      #texture,
+      #neon {
+        display: none;
+      }
+      
+      /* La gomme reste visible même sur très petits écrans */
+      #eraser {
+        display: flex !important;
+      }
+      
+      .tool-btn {
+        min-width: 26px;
+        min-height: 26px;
+        font-size: 12px;
+      }
+      
+      #size-slider {
+        width: 40px;
+      }
+    }
+    
+    /* Mode paysage - Interface ultra compacte */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .toolbar {
+        padding: 2px 3px;
+        gap: 2px;
+        min-height: 32px;
+      }
+      
+      .tool-btn {
+        min-width: 24px;
+        min-height: 24px;
+        font-size: 11px;
+      }
+      
+      .current-color {
+        width: 24px;
+        height: 24px;
+      }
+      
+      #size-slider {
+        width: 35px;
+      }
+    }
+  </style>
 </head>
 <body>
   <div id="canvas-container"></div>
@@ -19,15 +201,28 @@
       <button id="fire" class="tool-btn" title="Feu">🔥</button>
       <button id="eraser" class="tool-btn" title="Gomme">🧽</button>
       <button id="pan" class="tool-btn" title="Déplacement">✋</button>
-      <button id="undo" class="tool-btn" title="Annuler (Ctrl+Z)">↶</button>
+      <button id="undo" class="tool-btn" title="Annuler">↶</button>
     </div>
 
     <div class="colors">
+      <!-- Interface desktop normale -->
       <div class="color-btn active" data-color="#FF5252" style="background-color:#FF5252;" title="Rouge"></div>
       <div class="color-btn" data-color="#4CAF50" style="background-color:#4CAF50;" title="Vert"></div>
       <div class="color-btn" data-color="#2196F3" style="background-color:#2196F3;" title="Bleu"></div>
       <div class="color-btn" data-color="#FFD740" style="background-color:#FFD740;" title="Jaune"></div>
       <div class="color-btn" data-color="#FFFFFF" style="background-color:#FFFFFF; border: 2px solid #666;" title="Blanc"></div>
+      
+      <!-- Interface mobile avec dropdown -->
+      <div class="color-dropdown">
+        <div class="current-color" style="background-color:#FF5252;" title="Changer couleur"></div>
+        <div class="color-palette">
+          <div class="color-btn" data-color="#FF5252" style="background-color:#FF5252;"></div>
+          <div class="color-btn" data-color="#4CAF50" style="background-color:#4CAF50;"></div>
+          <div class="color-btn" data-color="#2196F3" style="background-color:#2196F3;"></div>
+          <div class="color-btn" data-color="#FFD740" style="background-color:#FFD740;"></div>
+          <div class="color-btn" data-color="#FFFFFF" style="background-color:#FFFFFF; border: 1px solid #666;"></div>
+        </div>
+      </div>
     </div>
 
     <input type="range" id="size-slider" min="1" max="20" value="4" title="Épaisseur" />
@@ -38,5 +233,45 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="brushManager.js"></script>
   <script src="app.js"></script>
+  
+  <script>
+    // Gestion du dropdown couleurs sur mobile
+    document.addEventListener('DOMContentLoaded', () => {
+      const currentColor = document.querySelector('.current-color');
+      const colorPalette = document.querySelector('.color-palette');
+      const paletteColors = colorPalette.querySelectorAll('.color-btn');
+      
+      // Toggle palette
+      currentColor?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        colorPalette.classList.toggle('show');
+      });
+      
+      // Fermer palette si clic ailleurs
+      document.addEventListener('click', () => {
+        colorPalette.classList.remove('show');
+      });
+      
+      // Sélection couleur depuis palette
+      paletteColors.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const color = btn.dataset.color;
+          
+          // Mettre à jour couleur courante
+          currentColor.style.backgroundColor = color;
+          currentColor.dataset.color = color;
+          
+          // Mettre à jour couleur active dans le script principal
+          if (window.setCurrentColor) {
+            window.setCurrentColor(color);
+          }
+          
+          // Fermer palette
+          colorPalette.classList.remove('show');
+        });
+      });
+    });
+  </script>
 </body>
 </html>
