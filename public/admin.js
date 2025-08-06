@@ -615,26 +615,77 @@ socket.on('drawing', data => {
   layer.batchDraw();
 });
 
-// Effet texture (ancien système)
+// Effet texture haute qualité pour admin
 function createTextureEffect(x, y, color, size) {
-  for (let i = 0; i < 5; i++) {
-    const offsetX = (Math.random() - 0.5) * 10;
-    const offsetY = (Math.random() - 0.5) * 10;
-    const alpha = 0.3 + Math.random() * 0.3;
-    const dot = new Konva.Line({
-      points: [
-        x + offsetX,
-        y + offsetY,
-        x + offsetX + Math.random() * 2,
-        y + offsetY + Math.random() * 2
-      ],
-      stroke: color,
-      strokeWidth: 1 + Math.random() * (size / 3),
-      globalAlpha: alpha,
-      lineCap: 'round',
-      lineJoin: 'round'
-    });
+  // Optimisation zone visible pour admin
+  if (!brushManager.isInViewport(x, y)) {
+    return;
+  }
+  
+  // Qualité supérieure pour admin : plus de particules et plus d'effet
+  const particleCount = 8; // vs 5 pour public/atelier
+  const spreadMultiplier = 1.4; // Zone plus large
+  
+  for (let i = 0; i < particleCount; i++) {
+    const offsetX = (Math.random() - 0.5) * 15 * spreadMultiplier;
+    const offsetY = (Math.random() - 0.5) * 15 * spreadMultiplier;
+    const alpha = 0.4 + Math.random() * 0.4; // Plus visible
+    const dotSize = 1.2 + Math.random() * (size / 2.5); // Légèrement plus grand
+    
+    // Variation dans les formes pour plus de richesse
+    const shapeType = Math.random();
+    let dot;
+    
+    if (shapeType < 0.7) {
+      // Points classiques (70%)
+      dot = new Konva.Line({
+        points: [
+          x + offsetX,
+          y + offsetY,
+          x + offsetX + Math.random() * 3,
+          y + offsetY + Math.random() * 3
+        ],
+        stroke: color,
+        strokeWidth: dotSize,
+        globalAlpha: alpha,
+        lineCap: 'round',
+        lineJoin: 'round'
+      });
+    } else if (shapeType < 0.9) {
+      // Petits cercles pour plus de texture (20%)
+      dot = new Konva.Circle({
+        x: x + offsetX,
+        y: y + offsetY,
+        radius: dotSize * 0.8,
+        fill: color,
+        opacity: alpha * 0.8
+      });
+    } else {
+      // Mini-étoiles pour effet sparkle subtil (10%)
+      dot = new Konva.Star({
+        x: x + offsetX,
+        y: y + offsetY,
+        numPoints: 4,
+        innerRadius: dotSize * 0.3,
+        outerRadius: dotSize * 0.7,
+        fill: color,
+        opacity: alpha * 0.6,
+        rotation: Math.random() * 360
+      });
+    }
+    
     layer.add(dot);
+    
+    // Animation subtile pour certaines particules (admin uniquement)
+    if (Math.random() < 0.3) {
+      dot.to({
+        opacity: dot.opacity() * 0.3,
+        scaleX: 1.2,
+        scaleY: 1.2,
+        duration: 0.8 + Math.random() * 0.4,
+        easing: Konva.Easings.EaseOut
+      });
+    }
   }
   layer.batchDraw();
 }
