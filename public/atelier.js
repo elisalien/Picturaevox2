@@ -1,4 +1,4 @@
-// public/atelier.js - VERSION AVEC BRUSHMANAGER AMÉLIORÉ
+// public/atelier.js - Version simplifiée avec BrushManager externe
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -11,612 +11,8 @@ stage.add(layer);
 // Rendre stage disponible globalement
 window.stage = stage;
 
-// === BRUSHMANAGER AMÉLIORÉ INTÉGRÉ DIRECTEMENT (VERSION ATELIER MEDIUM QUALITY) ===
-class BrushManager {
-  constructor(clientType, layer, socket) {
-    this.clientType = clientType;
-    this.layer = layer;
-    this.socket = socket;
-    this.activeEffects = new Map();
-    this.permanentTraces = new Map();
-    this.lastEmit = 0;
-    this.effectCount = 0;
-    this.permanentCount = 0;
-    
-    this.config = this.getConfig();
-    this.maxPermanent = this.config.maxPermanent;
-    this.throttleTime = this.config.throttleTime;
-    this.cleanupInterval = this.config.cleanupInterval;
-    
-    setInterval(() => this.cleanup(), this.cleanupInterval);
-    setInterval(() => this.adaptQualityToPerformance(), 30000);
-    console.log(`✅ Enhanced BrushManager ready for ${clientType} with quality:`, this.config.quality);
-  }
-
-  getConfig() {
-    const configs = {
-      atelier: {
-        quality: 'enhanced_medium',
-        maxPermanent: 250, // Augmenté de 200 → 250
-        throttleTime: 250, // Réduit de 300 → 250ms
-        cleanupInterval: 25000,
-        effects: {
-          sparkles: { 
-            particles: 6, // Augmenté de 4 → 6
-            duration: 1600, // Augmenté de 1200 → 1600ms
-            permanentOpacity: 0.18, // Augmenté de 0.08 → 0.18
-            fadeStartTime: 20, // Augmenté de 15 → 20s
-            sizeMultiplier: 2.0
-          },
-          neon: { 
-            particles: 6, duration: 1800, permanentOpacity: 0.22, 
-            fadeStartTime: 20, sizeMultiplier: 1.8
-          },
-          watercolor: { 
-            drops: 5, duration: 2000, permanentOpacity: 0.12, 
-            fadeStartTime: 20, sizeMultiplier: 1.6
-          },
-          electric: { 
-            bolts: 3, segments: 6, duration: 1500, permanentOpacity: 0.14, 
-            fadeStartTime: 20, sizeMultiplier: 1.5
-          },
-          fire: { 
-            flames: 5, duration: 1600, permanentOpacity: 0.08, 
-            fadeStartTime: 20, sizeMultiplier: 1.7
-          },
-          petals: { 
-            count: 5, duration: 3000, permanentOpacity: 0.14, 
-            fadeStartTime: 20, sizeMultiplier: 1.5
-          }
-        }
-      }
-    };
-    return configs[this.clientType] || configs.atelier;
-  }
-
-  createAndEmitEffect(type, x, y, color, size) {
-    const now = Date.now();
-    if (now - this.lastEmit < this.throttleTime) return;
-    
-    this.createLocalEffect(type, x, y, color, size);
-    
-    if (this.socket) {
-      this.socket.emit('brushEffect', {
-        type, x, y, color, size,
-        interface: this.clientType,
-        timestamp: now
-      });
-    }
-    this.lastEmit = now;
-  }
-
-  createNetworkEffect(data) {
-    // Les données reçues sont en coordonnées réseau, on les utilise directement
-    // car elles correspondent aux coordonnées de canvas sans transformation
-    this.createLocalEffect(data.type, data.x, data.y, data.color, data.size);
-  }
-
-  createLocalEffect(type, x, y, color, size) {
-    const effectConfig = this.config.effects[type];
-    if (!effectConfig) return;
-    
-    const effectId = `${this.clientType}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    
-    switch(type) {
-      case 'sparkles': this.createSparkles(x, y, color, size, effectConfig, effectId); break;
-      case 'neon': this.createNeon(x, y, color, size, effectConfig, effectId); break;
-      case 'watercolor': this.createWatercolor(x, y, color, size, effectConfig, effectId); break;
-      case 'electric': this.createElectricTrace(x, y, color, size, effectConfig, effectId); break;
-      case 'fire': this.createFire(x, y, color, size, effectConfig, effectId); break;
-      case 'petals': this.createPetals(x, y, color, size, effectConfig, effectId); break;
-    }
-  }
-
-  createSparkles(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.particles; i++) {
-      const offsetX = (Math.random() - 0.5) * enhancedSize * 2.0;
-      const offsetY = (Math.random() - 0.5) * enhancedSize * 2.0;
-      const sparkleSize = 2.5 + Math.random() * 6.5; // Plus gros pour atelier
-      const isPermanent = Math.random() < 0.5;
-      
-      const sparkle = new Konva.Star({
-        x: x + offsetX, y: y + offsetY,
-        numPoints: 4, innerRadius: sparkleSize * 0.4, outerRadius: sparkleSize,
-        fill: color, rotation: Math.random() * 360,
-        opacity: isPermanent ? config.permanentOpacity : 1.0,
-        effectId, createdAt: Date.now(), isPermanent
-      });
-      
-      this.layer.add(sparkle);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(sparkle, config);
-      } else {
-        elements.push(sparkle);
-        this.animateSparkle(sparkle, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createNeon(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.particles; i++) {
-      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.3;
-      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.3;
-      const particleSize = 3.5 + Math.random() * 5.5; // Plus gros
-      const isPermanent = Math.random() < 0.5;
-      
-      const particle = new Konva.Circle({
-        x: x + offsetX, y: y + offsetY, radius: particleSize, fill: color,
-        opacity: isPermanent ? config.permanentOpacity : 0.9,
-        shadowColor: color, shadowBlur: isPermanent ? 10 : 20, shadowOpacity: isPermanent ? 0.7 : 0.9,
-        effectId, createdAt: Date.now(), isPermanent
-      });
-      
-      this.layer.add(particle);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(particle, config);
-      } else {
-        elements.push(particle);
-        this.animateNeon(particle, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createWatercolor(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.drops; i++) {
-      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.1;
-      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.1;
-      const dropSize = enhancedSize * (0.7 + Math.random() * 0.9); // Plus gros
-      const isPermanent = Math.random() < 0.5;
-      
-      const drop = new Konva.Circle({
-        x: x + offsetX, y: y + offsetY, radius: dropSize, fill: color,
-        opacity: isPermanent ? config.permanentOpacity : 0.6, // Plus visible
-        scaleX: 0.8 + Math.random() * 0.7, scaleY: 0.6 + Math.random() * 0.7,
-        effectId, createdAt: Date.now(), isPermanent
-      });
-      
-      this.layer.add(drop);
-      
-      if (isPermanent) {
-        drop.to({ 
-          radius: dropSize * 2.7, 
-          scaleX: drop.scaleX() * 1.7, 
-          scaleY: drop.scaleY() * 1.6, 
-          duration: 3.5, 
-          easing: Konva.Easings.EaseOut 
-        });
-        this.trackPermanentTrace(drop, config);
-      } else {
-        elements.push(drop);
-        this.animateWatercolor(drop, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  // NOUVEAU : Electric avec tracé déformé (version atelier)
-  createElectricTrace(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.bolts; i++) {
-      const points = this.generateElectricPath(x, y, enhancedSize, config.segments);
-      const isPermanent = Math.random() < 0.4;
-      
-      const bolt = new Konva.Line({
-        points, stroke: color,
-        strokeWidth: isPermanent ? 2 : (3 + Math.random() * 4.5), // Plus épais pour atelier
-        opacity: isPermanent ? config.permanentOpacity : 0.9,
-        lineCap: 'round', lineJoin: 'round',
-        shadowColor: color, shadowBlur: isPermanent ? 8 : 18, shadowOpacity: isPermanent ? 0.7 : 0.8,
-        effectId, createdAt: Date.now(), isPermanent,
-        originalPoints: [...points], animationOffset: Math.random() * Math.PI * 2
-      });
-      
-      this.layer.add(bolt);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(bolt, config);
-      } else {
-        elements.push(bolt);
-        this.animateElectricTrace(bolt, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  generateElectricPath(startX, startY, size, segments) {
-    const points = [startX, startY];
-    let currentX = startX, currentY = startY;
-    
-    for (let i = 0; i < segments; i++) {
-      const baseAngle = Math.random() * Math.PI * 2;
-      const deviation = (Math.random() - 0.5) * Math.PI * 0.9; // Plus de déviation
-      const angle = baseAngle + deviation;
-      
-      const distance = (Math.random() * size * 1.3) + (size * 0.5); // Distance plus grande
-      const nextX = currentX + Math.cos(angle) * distance;
-      const nextY = currentY + Math.sin(angle) * distance;
-      
-      const midX = (currentX + nextX) / 2 + (Math.random() - 0.5) * size * 0.4;
-      const midY = (currentY + nextY) / 2 + (Math.random() - 0.5) * size * 0.4;
-      
-      points.push(midX, midY, nextX, nextY);
-      currentX = nextX;
-      currentY = nextY;
-    }
-    
-    return points;
-  }
-
-  createFire(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.flames; i++) {
-      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.1;
-      const offsetY = (Math.random() - 0.5) * enhancedSize * 0.7;
-      const isPermanent = Math.random() < 0.4;
-      
-      const flame = new Konva.Ellipse({
-        x: x + offsetX, y: y + offsetY,
-        radiusX: isPermanent ? 5 : (6 + Math.random() * 7), // Plus gros
-        radiusY: isPermanent ? 8 : (12 + Math.random() * 9),
-        fill: color, opacity: isPermanent ? config.permanentOpacity : 0.8,
-        shadowColor: '#FF4500', shadowBlur: isPermanent ? 7 : 18, shadowOpacity: isPermanent ? 0.6 : 0.7,
-        effectId, createdAt: Date.now(), isPermanent
-      });
-      
-      this.layer.add(flame);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(flame, config);
-      } else {
-        elements.push(flame);
-        this.animateFire(flame, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createPetals(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.count; i++) {
-      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.3;
-      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.3;
-      const petalSize = enhancedSize * (0.6 + Math.random() * 0.7); // Plus gros
-      const isPermanent = Math.random() < 0.5;
-      
-      const petal = new Konva.Ellipse({
-        x: x + offsetX, y: y + offsetY,
-        radiusX: petalSize, radiusY: petalSize * 0.6, fill: color,
-        opacity: isPermanent ? config.permanentOpacity : (0.8 + Math.random() * 0.2),
-        rotation: Math.random() * 360,
-        scaleX: 0.8 + Math.random() * 0.7, scaleY: 0.6 + Math.random() * 0.7,
-        effectId, createdAt: Date.now(), isPermanent
-      });
-      
-      this.layer.add(petal);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(petal, config);
-      } else {
-        elements.push(petal);
-        this.animatePetals(petal, config.duration, i, enhancedSize);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  // ANIMATIONS AMÉLIORÉES (version atelier avec plus de variabilité)
-  animateSparkle(sparkle, duration, index) {
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const randomFactor = 0.4 + Math.random() * 0.5; // Plus de variation
-      const scale = 1.0 + Math.sin(frame.time * (0.009 + randomFactor * 0.005) + index * 0.7) * 0.7;
-      const rotation = sparkle.rotation() + (3 + Math.random() * 2.5);
-      const opacity = Math.max(0, 1.0 - progress * (0.5 + Math.random() * 0.3));
-      
-      sparkle.scaleX(scale).scaleY(scale).rotation(rotation).opacity(opacity);
-      
-      if (progress >= 1 || opacity <= 0) {
-        sparkle.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  animateNeon(particle, duration, index) {
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const randomFactor = 0.6 + Math.random() * 0.6;
-      const glow = 15 + Math.sin(frame.time * (0.011 + randomFactor * 0.006) + index * 0.9) * 12;
-      const opacity = Math.max(0, 0.9 - progress * (0.35 + Math.random() * 0.2));
-      const pulse = 1 + Math.sin(frame.time * (0.007 + randomFactor * 0.004) + index) * 0.6;
-      
-      particle.shadowBlur(glow).opacity(opacity).scaleX(pulse).scaleY(pulse);
-      
-      if (progress >= 1 || opacity <= 0) {
-        particle.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  animateWatercolor(drop, duration, index) {
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const expansion = 1 + progress * (3.0 + Math.random() * 0.8); // Plus d'expansion
-      const opacity = Math.max(0, 0.6 - progress * (0.18 + Math.random() * 0.12));
-      const organic = Math.sin(frame.time * (0.004 + Math.random() * 0.003) + index) * 0.35;
-      
-      drop.scaleX(expansion + organic).scaleY(expansion + organic * 0.8).opacity(opacity);
-      
-      if (progress >= 1 || opacity <= 0) {
-        drop.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  animateElectricTrace(bolt, duration, index) {
-    const originalPoints = bolt.originalPoints;
-    const animationOffset = bolt.animationOffset;
-    
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const flicker = 0.6 + Math.sin(frame.time * (0.07 + Math.random() * 0.05) + index * 2.2) * 0.4;
-      const glow = 12 + Math.sin(frame.time * (0.045 + Math.random() * 0.025) + index) * 10;
-      const opacity = Math.max(0, 0.9 - progress * (0.35 + Math.random() * 0.2));
-      
-      // Déformation du tracé plus prononcée pour atelier
-      const deformedPoints = [];
-      for (let i = 0; i < originalPoints.length; i += 2) {
-        const x = originalPoints[i];
-        const y = originalPoints[i + 1];
-        const deformX = Math.sin(frame.time * 0.012 + animationOffset + i * 0.12) * 4;
-        const deformY = Math.cos(frame.time * 0.014 + animationOffset + i * 0.12) * 3;
-        deformedPoints.push(x + deformX, y + deformY);
-      }
-      
-      bolt.points(deformedPoints);
-      bolt.opacity(flicker * opacity).shadowBlur(glow);
-      
-      if (progress >= 1 || opacity <= 0) {
-        bolt.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  animateFire(flame, duration, index) {
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const randomFactor = 0.5 + Math.random() * 0.7;
-      const flicker = 0.9 + Math.sin(frame.time * (0.022 + randomFactor * 0.012) + index * 0.8) * 0.35;
-      const rise = flame.y() - (2.0 + Math.random() * 1.0);
-      const sway = Math.sin(frame.time * (0.016 + randomFactor * 0.006) + index) * (3.5 + Math.random() * 1.5);
-      const opacity = Math.max(0, 0.8 - progress * (0.25 + Math.random() * 0.2));
-      
-      flame.scaleX(flicker).scaleY(flicker * 1.5).y(rise).x(flame.x() + sway * 0.18).opacity(opacity);
-      
-      if (progress >= 1 || opacity <= 0) {
-        flame.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  animatePetals(petal, duration, index, size) {
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const randomFactor = 0.4 + Math.random() * 0.8;
-      const rotation = petal.rotation() + (2.0 + Math.random() * 1.5);
-      const fall = petal.y() + (2.2 + Math.random() * 1.0);
-      const sway = Math.sin(frame.time * (0.013 + randomFactor * 0.007) + index) * (3.5 + Math.random() * 1.5);
-      const opacity = Math.max(0, petal.opacity() - progress * (0.15 + Math.random() * 0.1));
-      const flutter = 0.8 + Math.sin(frame.time * (0.016 + randomFactor * 0.009) + index) * 0.35;
-      
-      petal.rotation(rotation).y(fall).x(petal.x() + sway * 0.1)
-           .opacity(opacity).scaleX(flutter).scaleY(flutter * 0.75);
-      
-      if (progress >= 1 || opacity <= 0) {
-        petal.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  trackPermanentTrace(element, config) {
-    if (this.permanentCount >= this.maxPermanent) {
-      const oldestId = this.permanentTraces.keys().next().value;
-      if (oldestId) {
-        const oldTrace = this.permanentTraces.get(oldestId);
-        if (oldTrace.element && !oldTrace.element.isDestroyed()) {
-          oldTrace.element.destroy();
-        }
-        this.permanentTraces.delete(oldestId);
-        this.permanentCount--;
-      }
-    }
-    
-    const traceId = Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-    this.permanentTraces.set(traceId, {
-      element, createdAt: Date.now(), config,
-      fadeStartTime: config.fadeStartTime * 1000,
-      totalLifetime: 126000, // 126 secondes pour atelier (40% plus que public)
-      qualityLevel: this.clientType
-    });
-    this.permanentCount++;
-    this.startAgingProcess(traceId);
-  }
-
-  startAgingProcess(traceId) {
-    const trace = this.permanentTraces.get(traceId);
-    if (!trace) return;
-    
-    const checkAging = () => {
-      const currentTrace = this.permanentTraces.get(traceId);
-      if (!currentTrace || !currentTrace.element || currentTrace.element.isDestroyed()) return;
-      
-      const age = Date.now() - currentTrace.createdAt;
-      const element = currentTrace.element;
-      
-      if (age >= currentTrace.totalLifetime) {
-        element.to({
-          opacity: 0, duration: 7, easing: Konva.Easings.EaseOut,
-          onFinish: () => {
-            if (!element.isDestroyed()) element.destroy();
-            this.permanentTraces.delete(traceId);
-            this.permanentCount--;
-          }
-        });
-        return;
-      }
-      
-      if (age > currentTrace.fadeStartTime) {
-        const midLifetime = currentTrace.totalLifetime * 0.65; // 65% pour atelier
-        
-        if (age < midLifetime) {
-          const fadeProgress = (age - currentTrace.fadeStartTime) / (midLifetime - currentTrace.fadeStartTime);
-          const targetOpacity = currentTrace.config.permanentOpacity * (1 - fadeProgress * 0.25); // Fade plus doux
-          element.opacity(targetOpacity);
-          if (element.shadowBlur && element.shadowBlur() > 3) {
-            element.shadowBlur(Math.max(3, element.shadowBlur() * (1 - fadeProgress * 0.15)));
-          }
-        } else {
-          const finalFadeProgress = (age - midLifetime) / (currentTrace.totalLifetime - midLifetime);
-          const targetOpacity = currentTrace.config.permanentOpacity * 0.75 * (1 - finalFadeProgress * 0.65);
-          element.opacity(targetOpacity);
-          if (element.shadowBlur && element.shadowBlur() > 1.5) {
-            element.shadowBlur(Math.max(1.5, element.shadowBlur() * (1 - finalFadeProgress * 0.35)));
-          }
-        }
-      }
-      setTimeout(checkAging, 2000); // Check plus fréquent pour atelier
-    };
-    setTimeout(checkAging, trace.fadeStartTime);
-  }
-
-  trackEffect(effectId, elements, duration) {
-    this.activeEffects.set(effectId, { elements, timestamp: Date.now(), duration, qualityLevel: this.clientType });
-    setTimeout(() => this.removeEffect(effectId), duration + 2500);
-    this.layer.batchDraw();
-  }
-
-  removeEffect(effectId) {
-    const effect = this.activeEffects.get(effectId);
-    if (effect) {
-      effect.elements.forEach(el => { 
-        if (!el.isDestroyed()) {
-          el.to({
-            opacity: 0, duration: 0.7,
-            onFinish: () => { if (!el.isDestroyed()) el.destroy(); }
-          });
-        }
-      });
-      this.activeEffects.delete(effectId);
-    }
-  }
-
-  cleanup() {
-    const now = Date.now();
-    const expired = [];
-    
-    this.activeEffects.forEach((effect, effectId) => {
-      if (now - effect.timestamp > effect.duration + 6000) { // Plus de grâce pour atelier
-        expired.push(effectId);
-      }
-    });
-    
-    expired.forEach(id => this.removeEffect(id));
-    
-    const expiredTraces = [];
-    this.permanentTraces.forEach((trace, traceId) => {
-      if (now - trace.createdAt > trace.totalLifetime + 20000) {
-        expiredTraces.push(traceId);
-      }
-    });
-    
-    expiredTraces.forEach(id => {
-      const trace = this.permanentTraces.get(id);
-      if (trace && trace.element && !trace.element.isDestroyed()) {
-        trace.element.destroy();
-      }
-      this.permanentTraces.delete(id);
-      this.permanentCount--;
-    });
-    
-    if (expired.length > 0 || expiredTraces.length > 0) {
-      this.layer.batchDraw();
-    }
-  }
-
-  adaptQualityToPerformance() {
-    const totalElements = this.activeEffects.size + this.permanentCount;
-    if (totalElements > this.maxPermanent * 0.85) {
-      const oldElements = [];
-      this.permanentTraces.forEach((trace, id) => {
-        if (Date.now() - trace.createdAt > trace.totalLifetime * 0.75) {
-          oldElements.push(id);
-        }
-      });
-      
-      oldElements.slice(0, Math.floor(oldElements.length * 0.25)).forEach(id => {
-        const trace = this.permanentTraces.get(id);
-        if (trace?.element && !trace.element.isDestroyed()) {
-          trace.element.destroy();
-        }
-        this.permanentTraces.delete(id);
-        this.permanentCount--;
-      });
-      
-      console.log(`⚡ Atelier performance cleanup: removed ${oldElements.length} old elements`);
-    }
-  }
-
-  clearPermanentTraces() {
-    this.permanentTraces.forEach((trace) => {
-      if (trace.element && !trace.element.isDestroyed()) {
-        trace.element.destroy();
-      }
-    });
-    this.permanentTraces.clear();
-    this.permanentCount = 0;
-    this.layer.batchDraw();
-  }
-
-  cleanupUserEffects(socketId) {
-    this.activeEffects.forEach((effect, effectId) => {
-      if (effect.socketId === socketId) {
-        this.removeEffect(effectId);
-      }
-    });
-  }
-}
-
-// === RESTE DU CODE ATELIER.JS ===
+// Initialiser le BrushManager unifié
+const brushManager = new BrushManager(layer, socket);
 
 let currentTool = 'brush';
 let currentColor = '#FF5252';
@@ -629,10 +25,6 @@ let currentZoom = 1;
 let isCreatingShape = false;
 let shapePreview = null;
 let shapeStartPos = null;
-
-// Initialisation du BrushManager amélioré
-const brushManager = new BrushManager('atelier', layer, socket);
-console.log('🎯 Enhanced BrushManager atelier loaded and ready!');
 
 // === UTILITAIRES ===
 function throttle(func, wait) {
@@ -663,13 +55,8 @@ function getPressureSize(pressure) {
   return minSize + (maxSize - minSize) * pressure;
 }
 
-// Coordonnées sans transformation par le zoom pour les événements réseau
+// Coordonnées pour tous les cas (simplifiées)
 function getScenePos(pointer) {
-  return { x: pointer.x, y: pointer.y };
-}
-
-// Coordonnées pour le dessin local (avec transformation zoom)
-function getLocalScenePos(pointer) {
   return {
     x: (pointer.x - stage.x()) / stage.scaleX(),
     y: (pointer.y - stage.y()) / stage.scaleY()
@@ -684,16 +71,16 @@ const emitTextureThrottled = throttle((data) => {
   socket.emit('texture', data);
 }, 150);
 
-// Effet texture (ancien système) amélioré pour atelier
+// Effet texture simplifié
 function createTextureEffect(x, y, color, size) {
-  for (let i = 0; i < 7; i++) { // Plus de particules pour atelier
+  for (let i = 0; i < 7; i++) {
     const offsetX = (Math.random() - 0.5) * 12;
     const offsetY = (Math.random() - 0.5) * 12;
-    const alpha = 0.4 + Math.random() * 0.4; // Plus visible
+    const alpha = 0.4 + Math.random() * 0.4;
     const dot = new Konva.Line({
       points: [x + offsetX, y + offsetY, x + offsetX + Math.random() * 3, y + offsetY + Math.random() * 3],
       stroke: color,
-      strokeWidth: 1.5 + Math.random() * (size / 2.5), // Plus épais
+      strokeWidth: 1.5 + Math.random() * (size / 2.5),
       globalAlpha: alpha,
       lineCap: 'round',
       lineJoin: 'round'
@@ -788,7 +175,7 @@ stage.on('wheel', (e) => {
 });
 
 // Boutons zoom
-document.getElementById('zoom-in').addEventListener('click', () => {
+document.getElementById('zoom-in')?.addEventListener('click', () => {
   const newScale = Math.min(5, currentZoom * 1.2);
   stage.scale({ x: newScale, y: newScale });
   stage.batchDraw();
@@ -796,7 +183,7 @@ document.getElementById('zoom-in').addEventListener('click', () => {
   updateZoomDisplay();
 });
 
-document.getElementById('zoom-out').addEventListener('click', () => {
+document.getElementById('zoom-out')?.addEventListener('click', () => {
   const newScale = Math.max(0.1, currentZoom / 1.2);
   stage.scale({ x: newScale, y: newScale });
   stage.batchDraw();
@@ -804,7 +191,7 @@ document.getElementById('zoom-out').addEventListener('click', () => {
   updateZoomDisplay();
 });
 
-document.getElementById('reset-zoom').addEventListener('click', () => {
+document.getElementById('reset-zoom')?.addEventListener('click', () => {
   stage.scale({ x: 1, y: 1 });
   stage.position({ x: 0, y: 0 });
   stage.batchDraw();
@@ -813,7 +200,10 @@ document.getElementById('reset-zoom').addEventListener('click', () => {
 });
 
 function updateZoomDisplay() {
-  document.getElementById('zoom-indicator').textContent = Math.round(currentZoom * 100) + '%';
+  const zoomIndicator = document.getElementById('zoom-indicator');
+  if (zoomIndicator) {
+    zoomIndicator.textContent = Math.round(currentZoom * 100) + '%';
+  }
 }
 
 // Pipette couleur
@@ -904,7 +294,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   }
 
   if (currentTool === 'eyedropper') {
-    const localPos = getLocalScenePos(pointer);
+    const localPos = getScenePos(pointer);
     pickColor(localPos.x, localPos.y);
     return;
   }
@@ -912,29 +302,27 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   // Formes prédéfinies
   if (currentTool.startsWith('shape-')) {
     isCreatingShape = true;
-    shapeStartPos = getLocalScenePos(pointer);
+    shapeStartPos = getScenePos(pointer);
     return;
   }
 
   const pressure = getPressure(evt);
   const pressureSize = getPressureSize(pressure);
-
-  const networkPos = getScenePos(pointer);
-  const localPos = getLocalScenePos(pointer);
+  const scenePos = getScenePos(pointer);
 
   if (currentTool === 'texture') {
     isDrawing = true;
     currentId = generateId();
-    emitTextureThrottled({ x: networkPos.x, y: networkPos.y, color: currentColor, size: pressureSize });
-    createTextureEffect(localPos.x, localPos.y, currentColor, pressureSize);
+    emitTextureThrottled({ x: scenePos.x, y: scenePos.y, color: currentColor, size: pressureSize });
+    createTextureEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
 
-  // BRUSH ANIMÉS - Utilise le BrushManager amélioré
+  // BRUSH ANIMÉS - Utilise le BrushManager unifié
   if (['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
     isDrawing = true;
     currentId = generateId();
-    brushManager.createAndEmitEffect(currentTool, networkPos.x, networkPos.y, currentColor, pressureSize);
+    brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
 
@@ -943,7 +331,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   currentId = generateId();
   lastLine = new Konva.Line({
     id: currentId,
-    points: [localPos.x, localPos.y],
+    points: [scenePos.x, scenePos.y],
     stroke: currentColor,
     strokeWidth: pressureSize,
     globalCompositeOperation: currentTool === 'eraser' ? 'destination-out' : 'source-over',
@@ -952,10 +340,9 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
   });
   layer.add(lastLine);
   
-  // Émettre avec les coordonnées réseau pour la synchronisation
   emitDrawingThrottled({
     id: currentId,
-    points: [networkPos.x, networkPos.y],
+    points: [scenePos.x, scenePos.y],
     stroke: currentColor,
     strokeWidth: pressureSize,
     globalCompositeOperation: currentTool === 'eraser' ? 'destination-out' : 'source-over'
@@ -980,26 +367,26 @@ stage.on('mousemove touchmove pointermove', (evt) => {
   if (isCreatingShape && shapeStartPos) {
     if (shapePreview) shapePreview.destroy();
 
-    const localPos = getLocalScenePos(pointer);
+    const scenePos = getScenePos(pointer);
 
     switch(currentTool) {
       case 'shape-circle':
-        shapePreview = createCircle(shapeStartPos, localPos);
+        shapePreview = createCircle(shapeStartPos, scenePos);
         break;
       case 'shape-rectangle':
-        shapePreview = createRectangle(shapeStartPos, localPos);
+        shapePreview = createRectangle(shapeStartPos, scenePos);
         break;
       case 'shape-triangle':
-        shapePreview = createTriangle(shapeStartPos, localPos);
+        shapePreview = createTriangle(shapeStartPos, scenePos);
         break;
       case 'shape-star':
-        shapePreview = createStar(shapeStartPos, localPos);
+        shapePreview = createStar(shapeStartPos, scenePos);
         break;
       case 'shape-line':
-        shapePreview = createLine(shapeStartPos, localPos);
+        shapePreview = createLine(shapeStartPos, scenePos);
         break;
       case 'shape-arrow':
-        shapePreview = createArrow(shapeStartPos, localPos);
+        shapePreview = createArrow(shapeStartPos, scenePos);
         break;
     }
 
@@ -1015,47 +402,31 @@ stage.on('mousemove touchmove pointermove', (evt) => {
 
   const pressure = getPressure(evt);
   const pressureSize = getPressureSize(pressure);
-  
-  const networkPos = getScenePos(pointer);
-  const localPos = getLocalScenePos(pointer);
+  const scenePos = getScenePos(pointer);
 
   if (currentTool === 'texture') {
-    emitTextureThrottled({ x: networkPos.x, y: networkPos.y, color: currentColor, size: pressureSize });
-    createTextureEffect(localPos.x, localPos.y, currentColor, pressureSize);
+    emitTextureThrottled({ x: scenePos.x, y: scenePos.y, color: currentColor, size: pressureSize });
+    createTextureEffect(scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
 
   // BRUSH ANIMÉS - Continuer l'effet
   if (['sparkles', 'watercolor', 'electric', 'petals', 'neon', 'fire'].includes(currentTool)) {
-    brushManager.createAndEmitEffect(currentTool, networkPos.x, networkPos.y, currentColor, pressureSize);
+    brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
   }
 
   // Dessin normal
   if (lastLine) {
-    lastLine.points(lastLine.points().concat([localPos.x, localPos.y]));
+    lastLine.points(lastLine.points().concat([scenePos.x, scenePos.y]));
     lastLine.strokeWidth(pressureSize);
     layer.batchDraw();
 
-    // Pour la synchronisation réseau, construire les points réseau
-    const localPoints = lastLine.points();
-    const networkPoints = [];
-    
-    // Convertir tous les points locaux en points réseau
-    for (let i = 0; i < localPoints.length; i += 2) {
-      const localX = localPoints[i];
-      const localY = localPoints[i + 1];
-      // Convertir les coordonnées locales en coordonnées réseau
-      const netX = localX * stage.scaleX() + stage.x();
-      const netY = localY * stage.scaleY() + stage.y();
-      networkPoints.push(netX, netY);
-    }
-
     emitDrawingThrottled({
       id: currentId,
-      points: networkPoints,
+      points: lastLine.points(),
       stroke: lastLine.stroke(),
-      strokeWidth: lastLine.strokeWidth(),
+      strokeWidth: pressureSize,
       globalCompositeOperation: lastLine.globalCompositeOperation()
     });
   }
@@ -1095,21 +466,9 @@ stage.on('mouseup touchend pointerup', () => {
 
   // Événement final pour le dessin normal
   if (lastLine) {
-    // Convertir les points locaux en points réseau pour la synchronisation finale
-    const localPoints = lastLine.points();
-    const networkPoints = [];
-    
-    for (let i = 0; i < localPoints.length; i += 2) {
-      const localX = localPoints[i];
-      const localY = localPoints[i + 1];
-      const netX = localX * stage.scaleX() + stage.x();
-      const netY = localY * stage.scaleY() + stage.y();
-      networkPoints.push(netX, netY);
-    }
-    
     socket.emit('draw', {
       id: currentId,
-      points: networkPoints,
+      points: lastLine.points(),
       stroke: lastLine.stroke(),
       strokeWidth: lastLine.strokeWidth(),
       globalCompositeOperation: lastLine.globalCompositeOperation()
@@ -1151,21 +510,10 @@ socket.on('initShapes', shapes => {
 socket.on('drawing', data => {
   let shape = layer.findOne('#' + data.id);
   
-  // Convertir les points réseau en points locaux
-  const networkPoints = data.points;
-  const localPoints = [];
-  for (let i = 0; i < networkPoints.length; i += 2) {
-    const netX = networkPoints[i];
-    const netY = networkPoints[i + 1];
-    const localX = (netX - stage.x()) / stage.scaleX();
-    const localY = (netY - stage.y()) / stage.scaleY();
-    localPoints.push(localX, localY);
-  }
-  
   if (!shape) {
     shape = new Konva.Line({
       id: data.id,
-      points: localPoints,
+      points: data.points,
       stroke: data.stroke,
       strokeWidth: data.strokeWidth,
       globalCompositeOperation: data.globalCompositeOperation,
@@ -1174,18 +522,15 @@ socket.on('drawing', data => {
     });
     layer.add(shape);
   } else {
-    shape.points(localPoints);
+    shape.points(data.points);
     shape.strokeWidth(data.strokeWidth);
   }
   layer.batchDraw();
 });
 
-// BRUSH EFFECTS - Utilise le BrushManager amélioré
+// BRUSH EFFECTS - Utilise le BrushManager unifié
 socket.on('brushEffect', (data) => {
-  // Convertir les coordonnées réseau en coordonnées locales pour l'affichage
-  const localX = (data.x - stage.x()) / stage.scaleX();
-  const localY = (data.y - stage.y()) / stage.scaleY();
-  brushManager.createLocalEffect(data.type, localX, localY, data.color, data.size);
+  brushManager.createNetworkEffect(data);
 });
 
 socket.on('cleanupUserEffects', (data) => {
@@ -1193,34 +538,20 @@ socket.on('cleanupUserEffects', (data) => {
 });
 
 socket.on('texture', data => {
-  // Convertir les coordonnées réseau en coordonnées locales
-  const localX = (data.x - stage.x()) / stage.scaleX();
-  const localY = (data.y - stage.y()) / stage.scaleY();
-  createTextureEffect(localX, localY, data.color, data.size);
+  createTextureEffect(data.x, data.y, data.color, data.size);
 });
 
 socket.on('draw', data => {
-  // Convertir les points réseau en points locaux
-  const networkPoints = data.points;
-  const localPoints = [];
-  for (let i = 0; i < networkPoints.length; i += 2) {
-    const netX = networkPoints[i];
-    const netY = networkPoints[i + 1];
-    const localX = (netX - stage.x()) / stage.scaleX();
-    const localY = (netY - stage.y()) / stage.scaleY();
-    localPoints.push(localX, localY);
-  }
-  
   let shape = layer.findOne('#' + data.id);
   if (shape) {
-    shape.points(localPoints);
+    shape.points(data.points);
     shape.stroke(data.stroke);
     shape.strokeWidth(data.strokeWidth);
     shape.globalCompositeOperation(data.globalCompositeOperation);
   } else {
     const line = new Konva.Line({
       id: data.id,
-      points: localPoints,
+      points: data.points,
       stroke: data.stroke,
       strokeWidth: data.strokeWidth,
       globalCompositeOperation: data.globalCompositeOperation,
@@ -1242,13 +573,13 @@ socket.on('deleteShape', ({ id }) => {
 
 socket.on('clearCanvas', () => {
   layer.destroyChildren();
-  brushManager.clearPermanentTraces();
+  brushManager.clearAllEffects();
   layer.draw();
 });
 
 socket.on('restoreShapes', (shapes) => {
   layer.destroyChildren();
-  brushManager.clearPermanentTraces();
+  brushManager.clearAllEffects();
   shapes.forEach(data => {
     const line = new Konva.Line({
       id: data.id,
@@ -1294,9 +625,7 @@ socket.on('shapeCreate', data => {
 
 // NOUVEL ÉVÉNEMENT - Reset des brush effects par admin
 socket.on('adminResetBrushEffects', () => {
-  brushManager.clearPermanentTraces();
-  brushManager.activeEffects.clear();
-  layer.batchDraw();
+  brushManager.clearAllEffects();
   
   // Notification pour informer l'utilisateur
   const notification = document.createElement('div');
@@ -1337,5 +666,4 @@ notificationStyle.textContent = `
 `;
 document.head.appendChild(notificationStyle);
 
-console.log('✅ Enhanced Atelier.js loaded with improved BrushManager');
-console.log('🎯 All enhanced brush effects ready: bigger particles, longer duration, better visibility!');
+console.log('✅ Simplified Atelier.js loaded with unified BrushManager');
