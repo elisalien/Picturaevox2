@@ -88,7 +88,7 @@ app.get('/health', (req, res) => {
 io.on('connection', socket => {
   console.log('a user connected');
 
-  // Send existing shapes to this client
+  // Send existing shapes to this client (INCLUDING permanent traces)
   socket.emit('initShapes', Object.values(shapes));
 
   // Broadcast streaming drawing data
@@ -104,13 +104,27 @@ io.on('connection', socket => {
     }
   });
 
-  // Gestion des brush effects
+  // Gestion des brush effects avec sauvegarde des tracés permanents
   socket.on('brushEffect', data => {
     const now = Date.now();
     const throttleTime = data.interface === 'admin' ? 100 : 
                         data.interface === 'atelier' ? 150 : 250;
     
     if (!socket.lastBrushEffect || (now - socket.lastBrushEffect) >= throttleTime) {
+      // ✅ NOUVEAU : Sauvegarder les tracés permanents
+      if (data.permanentTraces && data.permanentTraces.length > 0) {
+        data.permanentTraces.forEach(trace => {
+          const traceWithTimestamp = addTimestampToShape({
+            ...trace,
+            id: trace.id || generateTraceId(),
+            type: 'permanentTrace'
+          });
+          shapes[traceWithTimestamp.id] = traceWithTimestamp;
+        });
+        
+        console.log(`💾 Saved ${data.permanentTraces.length} permanent traces from ${data.type} brush`);
+      }
+      
       socket.broadcast.emit('brushEffect', {
         ...data,
         socketId: socket.id,
@@ -235,6 +249,11 @@ io.on('connection', socket => {
     socket.broadcast.emit('cleanupUserEffects', { socketId: socket.id });
   });
 });
+
+// Fonction pour générer un ID de tracé permanent
+function generateTraceId() {
+  return 'trace_' + Date.now() + '_' + Math.round(Math.random() * 100000);
+}
 
 // Fonction pour simplifier les points
 function simplifyPoints(points, maxPoints) {

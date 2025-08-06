@@ -83,18 +83,47 @@ function createTextureEffect(x, y, color, size) {
 
 socket.on('initShapes', shapes => {
   shapes.forEach(data => {
-    const line = new Konva.Line({
-      id: data.id,
-      points: data.points,
-      stroke: data.stroke,
-      strokeWidth: data.strokeWidth,
-      globalCompositeOperation: data.globalCompositeOperation,
-      lineCap: 'round',
-      lineJoin: 'round'
-    });
-    layer.add(line);
+    if (data.type === 'permanentTrace') {
+      // ✅ Recréer les tracés permanents depuis le serveur
+      let element;
+      
+      switch(data.shapeType) {
+        case 'Star':
+          element = new Konva.Star(data.attrs);
+          break;
+        case 'Circle':
+          element = new Konva.Circle(data.attrs);
+          break;
+        case 'Line':
+          element = new Konva.Line(data.attrs);
+          break;
+        case 'Ellipse':
+          element = new Konva.Ellipse(data.attrs);
+          break;
+      }
+      
+      if (element) {
+        element.id(data.id);
+        element.isPermanentTrace = true;
+        layer.add(element);
+      }
+    } else {
+      // Tracé normal
+      const line = new Konva.Line({
+        id: data.id,
+        points: data.points,
+        stroke: data.stroke,
+        strokeWidth: data.strokeWidth,
+        globalCompositeOperation: data.globalCompositeOperation,
+        lineCap: 'round',
+        lineJoin: 'round'
+      });
+      layer.add(line);
+    }
   });
   layer.draw();
+  
+  console.log(`🎨 ADMIN: Loaded ${shapes.length} shapes (including permanent traces)`);
 });
 
 socket.on('drawing', data => {
