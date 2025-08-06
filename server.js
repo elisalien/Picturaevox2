@@ -86,7 +86,8 @@ app.get('/health', (req, res) => {
 });
 
 io.on('connection', socket => {
-  console.log('a user connected');
+  const connectedClients = io.engine.clientsCount;
+  console.log(`👤 USER CONNECTED: ${socket.id} (Total: ${connectedClients} clients)`);
 
   // Send existing shapes to this client (INCLUDING permanent traces)
   socket.emit('initShapes', Object.values(shapes));
@@ -187,9 +188,28 @@ io.on('connection', socket => {
     console.log(`🧽 Shape ${id} deleted globally (type: ${deletedShape?.type || 'normal'})`);
   });
 
-  // Clear canvas - ✅ CORRIGÉ POUR ADMIN avec tracés permanents
+  // === NOUVEAU ÉVÉNEMENT DE TEST POUR DEBUG ===
+  socket.on('testBroadcast', (data) => {
+    const connectedClients = io.engine.clientsCount;
+    console.log(`📡 TEST BROADCAST from ${socket.id} to ${connectedClients} clients:`, data.message);
+    
+    io.emit('testBroadcastReceived', {
+      message: data.message,
+      from: socket.id,
+      timestamp: Date.now(),
+      totalClients: connectedClients
+    });
+  });
+
+  // Clear canvas - ✅ AVEC LOGS DEBUG DÉTAILLÉS
   socket.on('clearCanvas', () => {
-    console.log('🧼 Clear canvas command - shapes before:', Object.keys(shapes).length);
+    const shapesCount = Object.keys(shapes).length;
+    const connectedClients = io.engine.clientsCount;
+    
+    console.log(`🧼 CLEAR CANVAS REQUEST:`);
+    console.log(`   - Shapes in store: ${shapesCount}`);
+    console.log(`   - Connected clients: ${connectedClients}`);
+    console.log(`   - Request from socket: ${socket.id}`);
     
     // Sauvegarder toutes les formes pour undo (incluant tracés permanents)
     const allShapes = { ...shapes };
@@ -205,11 +225,16 @@ io.on('connection', socket => {
       delete shapes[id];
     });
     
+    console.log(`🧼 BROADCASTING clearCanvas to ALL ${connectedClients} clients...`);
+    
     // ✅ CORRECTION : Envoyer à TOUS les clients (y compris admin)
     io.emit('clearCanvas');
     
-    console.log(`🧼 Canvas cleared globally (including permanent traces) - shapes remaining: ${Object.keys(shapes).length}`);
-    console.log(`🧼 Cleared ${shapeIds.length} shapes total`);
+    const shapesAfter = Object.keys(shapes).length;
+    console.log(`🧼 CLEAR COMPLETE:`);
+    console.log(`   - Shapes cleared: ${shapeIds.length}`);
+    console.log(`   - Shapes remaining: ${shapesAfter}`);
+    console.log(`   - Broadcast sent to ${connectedClients} clients`);
   });
 
   // Undo action - Limité à 2 actions

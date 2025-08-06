@@ -272,8 +272,24 @@ socket.on('shapeCreate', data => {
   }
 });
 
-// Raccourcis clavier admin
+// === TEST DE CONNECTIVITÉ ===
+socket.on('testBroadcastReceived', (data) => {
+  console.log(`📡 ADMIN received test broadcast:`, data);
+});
+
+// Fonction pour tester la connectivité
+function testBroadcast() {
+  console.log('📡 ADMIN: Testing broadcast connectivity...');
+  socket.emit('testBroadcast', { message: 'Test from ADMIN', interface: 'admin' });
+}
+
+// Ajouter un bouton de test temporaire (pour debug)
 document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+    e.preventDefault();
+    testBroadcast();
+  }
+  
   if (e.ctrlKey && e.key === 'z') {
     e.preventDefault();
     socket.emit('undo');

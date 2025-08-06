@@ -1,4 +1,24 @@
-// public/app.js - Version avec support des tracés permanents
+// MODIFIÉ : Clear canvas avec logs debug ULTRA détaillés
+socket.on('clearCanvas', () => {
+  const childrenBefore = layer.getChildren().length;
+  const permanentTraces = layer.getChildren().filter(child => child.isPermanentTrace).length;
+  const normalShapes = childrenBefore - permanentTraces;
+  
+  console.log(`🧼 INDEX RECEIVED clearCanvas event:`);
+  console.log(`   - Total elements before: ${childrenBefore}`);
+  console.log(`   - Permanent traces: ${permanentTraces}`);
+  console.log(`   - Normal shapes: ${normalShapes}`);
+  console.log(`   - Socket ID: ${socket.id}`);
+  
+  layer.destroyChildren(); // ✅ Supprime TOUT (y compris tracés permanents)
+  brushManager.clearEverything(); // ✅ Clear complet du BrushManager
+  layer.draw();
+  
+  const childrenAfter = layer.getChildren().length;
+  console.log(`🧼 INDEX clearCanvas COMPLETE:`);
+  console.log(`   - Elements after: ${childrenAfter}`);
+  console.log(`   - Successfully cleared: ${childrenBefore - childrenAfter} elements`);
+});// public/app.js - Version avec support des tracés permanents
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -12,25 +32,15 @@ stage.add(layer);
 const brushManager = new BrushManager(layer, socket);
 
 let currentTool  = 'brush';
-let currentColor = '#FF5252'; // Couleur par défaut
+let currentColor = '#FF5252'; // Couleur rouge fixe par défaut pour /index
 let currentSize  = parseInt(document.getElementById('size-slider').value, 10);
 let isDrawing    = false;
 let lastLine;
 let currentId;
 let lastPanPos = null;
 
-// Fonction globale pour changer la couleur (utilisée par le dropdown mobile)
-window.setCurrentColor = function(color) {
-  currentColor = color;
-  
-  // Mettre à jour aussi les couleurs desktop si visibles
-  document.querySelectorAll('.colors > .color-btn').forEach(btn => {
-    btn.classList.remove('active');
-    if (btn.dataset.color === color) {
-      btn.classList.add('active');
-    }
-  });
-};
+// Fonction globale pour changer la couleur - SUPPRIMÉE pour /index
+// Interface /index utilise couleur fixe rouge (#FF5252)
 
 // === UTILITAIRES ===
 function throttle(func, wait) {
@@ -127,25 +137,17 @@ function showUndoNotification() {
   }, 800);
 }
 
-// Color selection - Interface desktop normale
-document.querySelectorAll('.colors > .color-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.colors > .color-btn').forEach(c => c.classList.remove('active'));
-    btn.classList.add('active');
-    currentColor = btn.dataset.color;
-    
-    // Mettre à jour le dropdown mobile aussi
-    const currentColorDisplay = document.querySelector('.current-color');
-    if (currentColorDisplay) {
-      currentColorDisplay.style.backgroundColor = currentColor;
-      currentColorDisplay.dataset.color = currentColor;
-    }
-  });
-});
+// Color selection - SUPPRIMÉ pour /index (couleur fixe)
+// Interface /index utilise une couleur fixe rouge pour simplicité
 
 // Size slider
 document.getElementById('size-slider').addEventListener('input', e => {
   currentSize = parseInt(e.target.value, 10);
+});
+
+// === TEST DE CONNECTIVITÉ ===
+socket.on('testBroadcastReceived', (data) => {
+  console.log(`📡 INDEX received test broadcast:`, data);
 });
 
 // Raccourci Ctrl+Z pour undo
