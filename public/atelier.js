@@ -845,11 +845,50 @@ function createRectangle(startPos, endPos) {
   });
 }
 
+function createTriangle(startPos, endPos) {
+  const width = endPos.x - startPos.x;
+  const height = endPos.y - startPos.y;
+  return new Konva.Line({
+    points: [startPos.x, endPos.y, startPos.x + width/2, startPos.y, endPos.x, endPos.y, startPos.x, endPos.y],
+    stroke: currentColor, strokeWidth: currentSize, fill: 'transparent', closed: true
+  });
+}
+
+function createStar(startPos, endPos) {
+  const centerX = (startPos.x + endPos.x) / 2;
+  const centerY = (startPos.y + endPos.y) / 2;
+  const radius = Math.sqrt(Math.pow(endPos.x - centerX, 2) + Math.pow(endPos.y - centerY, 2));
+  return new Konva.Star({
+    x: centerX, y: centerY, numPoints: 5, innerRadius: radius * 0.4, outerRadius: radius,
+    stroke: currentColor, strokeWidth: currentSize, fill: 'transparent'
+  });
+}
+
 function createLine(startPos, endPos) {
   return new Konva.Line({
     points: [startPos.x, startPos.y, endPos.x, endPos.y],
     stroke: currentColor, strokeWidth: currentSize, lineCap: 'round'
   });
+}
+
+function createArrow(startPos, endPos) {
+  const line = new Konva.Line({
+    points: [startPos.x, startPos.y, endPos.x, endPos.y],
+    stroke: currentColor, strokeWidth: currentSize, lineCap: 'round'
+  });
+  
+  // Ajouter pointe de flèche
+  const angle = Math.atan2(endPos.y - startPos.y, endPos.x - startPos.x);
+  const arrowLength = 20;
+  const arrowAngle = Math.PI / 6;
+  
+  const arrow1X = endPos.x - arrowLength * Math.cos(angle - arrowAngle);
+  const arrow1Y = endPos.y - arrowLength * Math.sin(angle - arrowAngle);
+  const arrow2X = endPos.x - arrowLength * Math.cos(angle + arrowAngle);
+  const arrow2Y = endPos.y - arrowLength * Math.sin(angle + arrowAngle);
+  
+  line.points([startPos.x, startPos.y, endPos.x, endPos.y, arrow1X, arrow1Y, endPos.x, endPos.y, arrow2X, arrow2Y]);
+  return line;
 }
 
 // === ÉVÉNEMENTS DE DESSIN ===
@@ -939,8 +978,17 @@ stage.on('mousemove touchmove pointermove', (evt) => {
       case 'shape-rectangle':
         shapePreview = createRectangle(shapeStartPos, localPos);
         break;
+      case 'shape-triangle':
+        shapePreview = createTriangle(shapeStartPos, localPos);
+        break;
+      case 'shape-star':
+        shapePreview = createStar(shapeStartPos, localPos);
+        break;
       case 'shape-line':
         shapePreview = createLine(shapeStartPos, localPos);
+        break;
+      case 'shape-arrow':
+        shapePreview = createArrow(shapeStartPos, localPos);
         break;
     }
 
@@ -1030,6 +1078,19 @@ stage.on('mouseup touchend pointerup', () => {
       globalCompositeOperation: lastLine.globalCompositeOperation()
     });
   }
+});
+
+// Boutons d'action
+document.getElementById('export')?.addEventListener('click', () => {
+  const uri = stage.toDataURL({ pixelRatio: 2 });
+  const link = document.createElement('a');
+  link.download = 'atelier-canvas.png';
+  link.href = uri;
+  link.click();
+});
+
+document.getElementById('back-home')?.addEventListener('click', () => {
+  window.location.href = '/';
 });
 
 // === SOCKET LISTENERS ===
@@ -1124,4 +1185,87 @@ socket.on('restoreShapes', (shapes) => {
       points: data.points,
       stroke: data.stroke,
       strokeWidth: data.strokeWidth,
-      global
+      globalCompositeOperation: data.globalCompositeOperation,
+      lineCap: 'round',
+      lineJoin: 'round'
+    });
+    layer.add(line);
+  });
+  layer.draw();
+});
+
+socket.on('shapeCreate', data => {
+  let shape;
+  const config = data.config;
+  
+  switch(data.type) {
+    case 'shape-circle':
+      shape = new Konva.Circle(config);
+      break;
+    case 'shape-rectangle':
+      shape = new Konva.Rect(config);
+      break;
+    case 'shape-triangle':
+    case 'shape-line':
+    case 'shape-arrow':
+      shape = new Konva.Line(config);
+      break;
+    case 'shape-star':
+      shape = new Konva.Star(config);
+      break;
+  }
+  
+  if (shape) {
+    shape.id(data.id);
+    layer.add(shape);
+    layer.draw();
+  }
+});
+
+// NOUVEL ÉVÉNEMENT - Reset des brush effects par admin
+socket.on('adminResetBrushEffects', () => {
+  brushManager.clearPermanentTraces();
+  brushManager.activeEffects.clear();
+  layer.batchDraw();
+  
+  // Notification pour informer l'utilisateur
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(255, 140, 0, 0.9);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    z-index: 2000;
+    animation: fadeInOut 2s ease-out;
+    pointer-events: none;
+  `;
+  notification.textContent = '✨ Effets réinitialisés par Admin';
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.parentNode.removeChild(notification);
+    }
+  }, 2000);
+  
+  console.log('🎨 Admin reset: All brush effects cleared');
+});
+
+// Animation CSS pour la notification
+const notificationStyle = document.createElement('style');
+notificationStyle.textContent = `
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+  }
+`;
+document.head.appendChild(notificationStyle);
+
+console.log('✅ Enhanced Atelier.js loaded with improved BrushManager');
+console.log('🎯 All enhanced brush effects ready: bigger particles, longer duration, better visibility!');

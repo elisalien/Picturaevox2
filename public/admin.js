@@ -14,6 +14,509 @@ window.stage = stage;
 // === BRUSHMANAGER PREMIUM INTÉGRÉ DIRECTEMENT (VERSION ADMIN ULTRA HAUTE QUALITÉ) ===
 class BrushManager {
   constructor(clientType, layer, socket) {
+    this.clientType = clientType;
+    this.layer = layer;
+    this.socket = socket; // null pour admin car il n'émet pas
+    this.activeEffects = new Map();
+    this.permanentTraces = new Map();
+    this.lastEmit = 0;
+    this.effectCount = 0;
+    this.permanentCount = 0;
+    
+    this.config = this.getConfig();
+    this.maxPermanent = this.config.maxPermanent;
+    this.throttleTime = this.config.throttleTime;
+    this.cleanupInterval = this.config.cleanupInterval;
+    
+    // Zone visible pour optimisation (admin uniquement)
+    this.viewportBounds = null;
+    if (this.clientType === 'admin') {
+      this.setupViewportTracking();
+    }
+    
+    setInterval(() => this.cleanup(), this.cleanupInterval);
+    setInterval(() => this.adaptQualityToPerformance(), 35000);
+    console.log(`✅ PREMIUM BrushManager ready for ${clientType} with quality:`, this.config.quality);
+  }
+
+  getConfig() {
+    const configs = {
+      admin: {
+        quality: 'ultra_premium', // Niveau premium ultime
+        maxPermanent: 400, // Augmenté de 300 → 400
+        throttleTime: 120, // Réduit de 150 → 120ms pour fluidité maximale
+        cleanupInterval: 35000, // Augmenté de 30s → 35s
+        effects: {
+          sparkles: { 
+            particles: 10, // Augmenté de 6 → 10
+            duration: 2500, // Augmenté de 1800 → 2500ms
+            permanentOpacity: 0.25, // Augmenté de 0.12 → 0.25
+            fadeStartTime: 30, // Augmenté de 20 → 30s
+            sizeMultiplier: 2.5
+          },
+          neon: { 
+            particles: 10, duration: 2800, permanentOpacity: 0.30, 
+            fadeStartTime: 30, sizeMultiplier: 2.2
+          },
+          watercolor: { 
+            drops: 7, duration: 2800, permanentOpacity: 0.18, 
+            fadeStartTime: 30, sizeMultiplier: 2.0
+          },
+          electric: { 
+            bolts: 4, segments: 8, duration: 2200, permanentOpacity: 0.20, 
+            fadeStartTime: 30, sizeMultiplier: 1.8
+          },
+          fire: { 
+            flames: 8, duration: 2400, permanentOpacity: 0.12, 
+            fadeStartTime: 30, sizeMultiplier: 2.0
+          },
+          petals: { 
+            count: 7, duration: 4500, permanentOpacity: 0.20, 
+            fadeStartTime: 30, sizeMultiplier: 1.8
+          }
+        }
+      }
+    };
+    return configs[this.clientType] || configs.admin;
+  }
+
+  // Suivi de la zone visible pour /chantilly (admin)
+  setupViewportTracking() {
+    this.updateViewportBounds();
+    
+    if (typeof window !== 'undefined' && window.stage) {
+      window.stage.on('dragend', () => this.updateViewportBounds());
+      window.stage.on('wheel', () => {
+        setTimeout(() => this.updateViewportBounds(), 50);
+      });
+      setInterval(() => this.updateViewportBounds(), 2000);
+    }
+  }
+
+  updateViewportBounds() {
+    if (typeof window !== 'undefined' && window.stage) {
+      const stage = window.stage;
+      const scale = stage.scaleX();
+      const pos = stage.position();
+      
+      // Zone visible avec marge de 25% pour admin premium
+      const margin = 0.25;
+      const width = window.innerWidth / scale;
+      const height = window.innerHeight / scale;
+      const marginX = width * margin;
+      const marginY = height * margin;
+      
+      this.viewportBounds = {
+        x: (-pos.x / scale) - marginX,
+        y: (-pos.y / scale) - marginY,
+        width: width + (marginX * 2),
+        height: height + (marginY * 2)
+      };
+    }
+  }
+
+  // Vérifier si un point est dans la zone visible (optimisation admin)
+  isInViewport(x, y) {
+    if (!this.viewportBounds || this.clientType !== 'admin') return true;
+    
+    const bounds = this.viewportBounds;
+    return x >= bounds.x && x <= bounds.x + bounds.width &&
+           y >= bounds.y && y <= bounds.y + bounds.height;
+  }
+
+  // Admin ne dessine pas, seulement reçoit avec qualité maximale
+  createNetworkEffect(data) {
+    // Optimisation zone visible pour /chantilly
+    if (!this.isInViewport(data.x, data.y)) {
+      return;
+    }
+    
+    this.createLocalEffect(data.type, data.x, data.y, data.color, data.size);
+  }
+
+  createLocalEffect(type, x, y, color, size) {
+    const effectConfig = this.config.effects[type];
+    if (!effectConfig) return;
+    
+    const effectId = `${this.clientType}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    
+    switch(type) {
+      case 'sparkles': this.createSparkles(x, y, color, size, effectConfig, effectId); break;
+      case 'neon': this.createNeon(x, y, color, size, effectConfig, effectId); break;
+      case 'watercolor': this.createWatercolor(x, y, color, size, effectConfig, effectId); break;
+      case 'electric': this.createElectricTrace(x, y, color, size, effectConfig, effectId); break;
+      case 'fire': this.createFire(x, y, color, size, effectConfig, effectId); break;
+      case 'petals': this.createPetals(x, y, color, size, effectConfig, effectId); break;
+    }
+  }
+
+  // Effets ULTRA haute qualité pour admin premium
+  createSparkles(x, y, color, size, config, effectId) {
+    const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
+    for (let i = 0; i < config.particles; i++) {
+      const offsetX = (Math.random() - 0.5) * enhancedSize * 2.2; // Plus d'étalement
+      const offsetY = (Math.random() - 0.5) * enhancedSize * 2.2;
+      const sparkleSize = 3 + Math.random() * 8; // Tailles maximales
+      const isPermanent = Math.random() < 0.6; // Plus de permanentes
+      
+      const sparkle = new Konva.Star({
+        x: x + offsetX, y: y + offsetY,
+        numPoints: 4, innerRadius: sparkleSize * 0.4, outerRadius: sparkleSize,
+        fill: color, rotation: Math.random() * 360,
+        opacity: isPermanent ? config.permanentOpacity : 1.0,
+        effectId, createdAt: Date.now(), isPermanent,
+        // Propriétés premium
+        shadowColor: color, shadowBlur: isPermanent ? 4 : 8, shadowOpacity: 0.5
+      });
+      
+      this.layer.add(sparkle);
+      
+      if (isPermanent) {
+        this.trackPermanentTrace(sparkle, config);
+      } else {
+        elements.push(sparkle);
+        this.animateSparkle(sparkle, config.duration, i);
+      }
+    }
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  createNeon(x, y, color, size, config, effectId) {
+    const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
+    for (let i = 0; i < config.particles; i++) {
+      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.4;
+      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.4;
+      const particleSize = 4 + Math.random() * 6; // Plus gros pour premium
+      const isPermanent = Math.random() < 0.6;
+      
+      const particle = new Konva.Circle({
+        x: x + offsetX, y: y + offsetY, radius: particleSize, fill: color,
+        opacity: isPermanent ? config.permanentOpacity : 0.95,
+        shadowColor: color, shadowBlur: isPermanent ? 12 : 25, shadowOpacity: isPermanent ? 0.8 : 0.95,
+        effectId, createdAt: Date.now(), isPermanent
+      });
+      
+      this.layer.add(particle);
+      
+      if (isPermanent) {
+        this.trackPermanentTrace(particle, config);
+      } else {
+        elements.push(particle);
+        this.animateNeon(particle, config.duration, i);
+      }
+    }
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  createWatercolor(x, y, color, size, config, effectId) {
+    const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
+    for (let i = 0; i < config.drops; i++) {
+      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.2;
+      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.2;
+      const dropSize = enhancedSize * (0.8 + Math.random() * 1.0); // Tailles premium
+      const isPermanent = Math.random() < 0.6;
+      
+      const drop = new Konva.Circle({
+        x: x + offsetX, y: y + offsetY, radius: dropSize, fill: color,
+        opacity: isPermanent ? config.permanentOpacity : 0.7, // Plus visible
+        scaleX: 0.8 + Math.random() * 0.8, scaleY: 0.6 + Math.random() * 0.8,
+        effectId, createdAt: Date.now(), isPermanent
+      });
+      
+      this.layer.add(drop);
+      
+      if (isPermanent) {
+        drop.to({ 
+          radius: dropSize * 3.0, // Expansion maximale
+          scaleX: drop.scaleX() * 1.8, 
+          scaleY: drop.scaleY() * 1.7, 
+          duration: 4, 
+          easing: Konva.Easings.EaseOut 
+        });
+        this.trackPermanentTrace(drop, config);
+      } else {
+        elements.push(drop);
+        this.animateWatercolor(drop, config.duration, i);
+      }
+    }
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  // PREMIUM : Electric avec tracé déformé ultra complexe
+  createElectricTrace(x, y, color, size, config, effectId) {
+    const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
+    for (let i = 0; i < config.bolts; i++) {
+      const points = this.generatePremiumElectricPath(x, y, enhancedSize, config.segments);
+      const isPermanent = Math.random() < 0.5;
+      
+      const bolt = new Konva.Line({
+        points, stroke: color,
+        strokeWidth: isPermanent ? 2.5 : (4 + Math.random() * 5), // Épaisseur maximale
+        opacity: isPermanent ? config.permanentOpacity : 0.95,
+        lineCap: 'round', lineJoin: 'round',
+        shadowColor: color, shadowBlur: isPermanent ? 10 : 20, shadowOpacity: isPermanent ? 0.8 : 0.9,
+        effectId, createdAt: Date.now(), isPermanent,
+        originalPoints: [...points], animationOffset: Math.random() * Math.PI * 2
+      });
+      
+      this.layer.add(bolt);
+      
+      if (isPermanent) {
+        this.trackPermanentTrace(bolt, config);
+      } else {
+        elements.push(bolt);
+        this.animatePremiumElectricTrace(bolt, config.duration, i);
+      }
+    }
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  // Génération de tracé électrique premium ultra complexe
+  generatePremiumElectricPath(startX, startY, size, segments) {
+    const points = [startX, startY];
+    let currentX = startX, currentY = startY;
+    
+    for (let i = 0; i < segments; i++) {
+      const baseAngle = Math.random() * Math.PI * 2;
+      const deviation = (Math.random() - 0.5) * Math.PI * 1.0; // Déviation maximale
+      const angle = baseAngle + deviation;
+      
+      const distance = (Math.random() * size * 1.5) + (size * 0.6); // Distance premium
+      const nextX = currentX + Math.cos(angle) * distance;
+      const nextY = currentY + Math.sin(angle) * distance;
+      
+      // Plusieurs points intermédiaires pour courbes complexes
+      const midX1 = (currentX + nextX) / 3 + (Math.random() - 0.5) * size * 0.5;
+      const midY1 = (currentY + nextY) / 3 + (Math.random() - 0.5) * size * 0.5;
+      const midX2 = (currentX + nextX) * 2/3 + (Math.random() - 0.5) * size * 0.4;
+      const midY2 = (currentY + nextY) * 2/3 + (Math.random() - 0.5) * size * 0.4;
+      
+      points.push(midX1, midY1, midX2, midY2, nextX, nextY);
+      currentX = nextX;
+      currentY = nextY;
+    }
+    
+    return points;
+  }
+
+  createFire(x, y, color, size, config, effectId) {
+    const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
+    for (let i = 0; i < config.flames; i++) {
+      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.2;
+      const offsetY = (Math.random() - 0.5) * enhancedSize * 0.8;
+      const isPermanent = Math.random() < 0.5;
+      
+      const flame = new Konva.Ellipse({
+        x: x + offsetX, y: y + offsetY,
+        radiusX: isPermanent ? 6 : (7 + Math.random() * 8), // Tailles maximales
+        radiusY: isPermanent ? 10 : (15 + Math.random() * 10),
+        fill: color, opacity: isPermanent ? config.permanentOpacity : 0.85,
+        shadowColor: '#FF4500', shadowBlur: isPermanent ? 8 : 20, shadowOpacity: isPermanent ? 0.7 : 0.8,
+        effectId, createdAt: Date.now(), isPermanent
+      });
+      
+      this.layer.add(flame);
+      
+      if (isPermanent) {
+        this.trackPermanentTrace(flame, config);
+      } else {
+        elements.push(flame);
+        this.animatePremiumFire(flame, config.duration, i);
+      }
+    }
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  createPetals(x, y, color, size, config, effectId) {
+    const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
+    for (let i = 0; i < config.count; i++) {
+      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.4;
+      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.4;
+      const petalSize = enhancedSize * (0.7 + Math.random() * 0.8); // Tailles premium
+      const isPermanent = Math.random() < 0.6;
+      
+      const petal = new Konva.Ellipse({
+        x: x + offsetX, y: y + offsetY,
+        radiusX: petalSize, radiusY: petalSize * 0.6, fill: color,
+        opacity: isPermanent ? config.permanentOpacity : (0.85 + Math.random() * 0.15),
+        rotation: Math.random() * 360,
+        scaleX: 0.8 + Math.random() * 0.8, scaleY: 0.6 + Math.random() * 0.8,
+        effectId, createdAt: Date.now(), isPermanent
+      });
+      
+      this.layer.add(petal);
+      
+      if (isPermanent) {
+        this.trackPermanentTrace(petal, config);
+      } else {
+        elements.push(petal);
+        this.animatePremiumPetals(petal, config.duration, i, enhancedSize);
+      }
+    }
+    this.trackEffect(effectId, elements, config.duration);
+  }
+
+  // ANIMATIONS PREMIUM ultra haute qualité pour admin
+  animateSparkle(sparkle, duration, index) {
+    const animation = new Konva.Animation((frame) => {
+      const progress = frame.time / duration;
+      const randomFactor = 0.5 + Math.random() * 0.6; // Variabilité maximale
+      const scale = 1.1 + Math.sin(frame.time * (0.010 + randomFactor * 0.006) + index * 0.8) * 0.8;
+      const rotation = sparkle.rotation() + (3.5 + Math.random() * 3);
+      const opacity = Math.max(0, 1.0 - progress * (0.4 + Math.random() * 0.3));
+      const glow = 6 + Math.sin(frame.time * 0.015 + index) * 4;
+      
+      sparkle.scaleX(scale).scaleY(scale).rotation(rotation).opacity(opacity).shadowBlur(glow);
+      
+      if (progress >= 1 || opacity <= 0) {
+        sparkle.destroy();
+        animation.stop();
+      }
+    }, this.layer);
+    animation.start();
+  }
+
+  animateNeon(particle, duration, index) {
+    const animation = new Konva.Animation((frame) => {
+      const progress = frame.time / duration;
+      const randomFactor = 0.7 + Math.random() * 0.7;
+      const glow = 20 + Math.sin(frame.time * (0.012 + randomFactor * 0.007) + index * 1.0) * 15;
+      const opacity = Math.max(0, 0.95 - progress * (0.3 + Math.random() * 0.2));
+      const pulse = 1 + Math.sin(frame.time * (0.008 + randomFactor * 0.005) + index) * 0.7;
+      
+      particle.shadowBlur(glow).opacity(opacity).scaleX(pulse).scaleY(pulse);
+      
+      if (progress >= 1 || opacity <= 0) {
+        particle.destroy();
+        animation.stop();
+      }
+    }, this.layer);
+    animation.start();
+  }
+
+  animateWatercolor(drop, duration, index) {
+    const animation = new Konva.Animation((frame) => {
+      const progress = frame.time / duration;
+      const expansion = 1 + progress * (3.5 + Math.random() * 1.0); // Expansion maximale
+      const opacity = Math.max(0, 0.7 - progress * (0.2 + Math.random() * 0.15));
+      const organic = Math.sin(frame.time * (0.005 + Math.random() * 0.004) + index) * 0.4;
+      
+      drop.scaleX(expansion + organic).scaleY(expansion + organic * 0.9).opacity(opacity);
+      
+      if (progress >= 1 || opacity <= 0) {
+        drop.destroy();
+        animation.stop();
+      }
+    }, this.layer);
+    animation.start();
+  }
+
+  // PREMIUM animation pour tracé électrique ultra complexe
+  animatePremiumElectricTrace(bolt, duration, index) {
+    const originalPoints = bolt.originalPoints;
+    const animationOffset = bolt.animationOffset;
+    
+    const animation = new Konva.Animation((frame) => {
+      const progress = frame.time / duration;
+      const flicker = 0.7 + Math.sin(frame.time * (0.08 + Math.random() * 0.06) + index * 2.5) * 0.3;
+      const glow = 15 + Math.sin(frame.time * (0.05 + Math.random() * 0.03) + index) * 12;
+      const opacity = Math.max(0, 0.95 - progress * (0.3 + Math.random() * 0.2));
+      
+      // Déformation ultra complexe du tracé
+      const deformedPoints = [];
+      for (let i = 0; i < originalPoints.length; i += 2) {
+        const x = originalPoints[i];
+        const y = originalPoints[i + 1];
+        
+        // Déformations multiples superposées
+        const deformX1 = Math.sin(frame.time * 0.014 + animationOffset + i * 0.15) * 5;
+        const deformY1 = Math.cos(frame.time * 0.016 + animationOffset + i * 0.15) * 4;
+        const deformX2 = Math.sin(frame.time * 0.008 + i * 0.08) * 2;
+        const deformY2 = Math.cos(frame.time * 0.010 + i * 0.08) * 2;
+        
+        deformedPoints.push(x + deformX1 + deformX2, y + deformY1 + deformY2);
+      }
+      
+      bolt.points(deformedPoints);
+      bolt.opacity(flicker * opacity).shadowBlur(glow);
+      
+      if (progress >= 1 || opacity <= 0) {
+        bolt.destroy();
+        animation.stop();
+      }
+    }, this.layer);
+    animation.start();
+  }
+
+  animatePremiumFire(flame, duration, index) {
+    const animation = new Konva.Animation((frame) => {
+      const progress = frame.time / duration;
+      const randomFactor = 0.6 + Math.random() * 0.8;
+      const flicker = 0.9 + Math.sin(frame.time * (0.025 + randomFactor * 0.015) + index * 0.9) * 0.4;
+      const rise = flame.y() - (2.5 + Math.random() * 1.2);
+      const sway = Math.sin(frame.time * (0.018 + randomFactor * 0.008) + index) * (4 + Math.random() * 2);
+      const opacity = Math.max(0, 0.85 - progress * (0.2 + Math.random() * 0.2));
+      const intensity = 15 + Math.sin(frame.time * 0.03 + index) * 8;
+      
+      flame.scaleX(flicker).scaleY(flicker * 1.6).y(rise).x(flame.x() + sway * 0.2)
+           .opacity(opacity).shadowBlur(intensity);
+      
+      if (progress >= 1 || opacity <= 0) {
+        flame.destroy();
+        animation.stop();
+      }
+    }, this.layer);
+    animation.start();
+  }
+
+  animatePremiumPetals(petal, duration, index, size) {
+    const animation = new Konva.Animation((frame) => {
+      const progress = frame.time / duration;
+      const randomFactor = 0.5 + Math.random() * 0.9;
+      const rotation = petal.rotation() + (2.2 + Math.random() * 1.8);
+      const fall = petal.y() + (2.5 + Math.random() * 1.2);
+      const sway = Math.sin(frame.time * (0.014 + randomFactor * 0.008) + index) * (4 + Math.random() * 2);
+      const opacity = Math.max(0, petal.opacity() - progress * (0.12 + Math.random() * 0.1));
+      const flutter = 0.8 + Math.sin(frame.time * (0.017 + randomFactor * 0.010) + index) * 0.4;
+      
+      petal.rotation(rotation).y(fall).x(petal.x() + sway * 0.12)
+           .opacity(opacity).scaleX(flutter).scaleY(flutter * 0.8);
+      
+      if (progress >= 1 || opacity <= 0) {
+        petal.destroy();
+        animation.stop();
+      }
+    }, this.layer);
+    animation.start();
+  }
+
+  // Système de vieillissement PREMIUM pour admin
+  trackPermanentTrace(element, config) {
+    if (this.permanentCount >= this.maxPermanent) {
+      const oldestId = this.permanentTraces.keys().next().value;
+      if (oldestId) {
+        const oldTrace = this.permanentTraces.get(oldestId);
+        if (oldTrace.element && !oldTrace.element.isDestroyed()) {
+          oldTrace.element.destroy();
+        }
+        this.permanentTraces.delete(oldestId);
+        this.permanentCount--;
+      }
+    }
+    
+    const traceId = Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     this.permanentTraces.set(traceId, {
       element, createdAt: Date.now(), config,
       fadeStartTime: config.fadeStartTime * 1000,
@@ -772,507 +1275,3 @@ console.log('🎯 PREMIUM BrushManager status: Ready with viewport culling + pre
 console.log('📍 Only effects in visible area + 25% margin will be rendered with maximum quality');
 console.log('🎨 PREMIUM Features: 10+ particles, 2500-4500ms duration, ultra complex animations!');
 console.log('👑 ADMIN POWERS: Global clear (Ctrl+Shift+C), Global brush reset (Ctrl+Shift+R), Global undo (Ctrl+Z)');
-clientType = clientType;
-    this.layer = layer;
-    this.socket = socket; // null pour admin car il n'émet pas
-    this.activeEffects = new Map();
-    this.permanentTraces = new Map();
-    this.lastEmit = 0;
-    this.effectCount = 0;
-    this.permanentCount = 0;
-    
-    this.config = this.getConfig();
-    this.maxPermanent = this.config.maxPermanent;
-    this.throttleTime = this.config.throttleTime;
-    this.cleanupInterval = this.config.cleanupInterval;
-    
-    // Zone visible pour optimisation (admin uniquement)
-    this.viewportBounds = null;
-    if (this.clientType === 'admin') {
-      this.setupViewportTracking();
-    }
-    
-    setInterval(() => this.cleanup(), this.cleanupInterval);
-    setInterval(() => this.adaptQualityToPerformance(), 35000);
-    console.log(`✅ PREMIUM BrushManager ready for ${clientType} with quality:`, this.config.quality);
-  }
-
-  getConfig() {
-    const configs = {
-      admin: {
-        quality: 'ultra_premium', // Niveau premium ultime
-        maxPermanent: 400, // Augmenté de 300 → 400
-        throttleTime: 120, // Réduit de 150 → 120ms pour fluidité maximale
-        cleanupInterval: 35000, // Augmenté de 30s → 35s
-        effects: {
-          sparkles: { 
-            particles: 10, // Augmenté de 6 → 10
-            duration: 2500, // Augmenté de 1800 → 2500ms
-            permanentOpacity: 0.25, // Augmenté de 0.12 → 0.25
-            fadeStartTime: 30, // Augmenté de 20 → 30s
-            sizeMultiplier: 2.5
-          },
-          neon: { 
-            particles: 10, duration: 2800, permanentOpacity: 0.30, 
-            fadeStartTime: 30, sizeMultiplier: 2.2
-          },
-          watercolor: { 
-            drops: 7, duration: 2800, permanentOpacity: 0.18, 
-            fadeStartTime: 30, sizeMultiplier: 2.0
-          },
-          electric: { 
-            bolts: 4, segments: 8, duration: 2200, permanentOpacity: 0.20, 
-            fadeStartTime: 30, sizeMultiplier: 1.8
-          },
-          fire: { 
-            flames: 8, duration: 2400, permanentOpacity: 0.12, 
-            fadeStartTime: 30, sizeMultiplier: 2.0
-          },
-          petals: { 
-            count: 7, duration: 4500, permanentOpacity: 0.20, 
-            fadeStartTime: 30, sizeMultiplier: 1.8
-          }
-        }
-      }
-    };
-    return configs[this.clientType] || configs.admin;
-  }
-
-  // Suivi de la zone visible pour /chantilly (admin)
-  setupViewportTracking() {
-    this.updateViewportBounds();
-    
-    if (typeof window !== 'undefined' && window.stage) {
-      window.stage.on('dragend', () => this.updateViewportBounds());
-      window.stage.on('wheel', () => {
-        setTimeout(() => this.updateViewportBounds(), 50);
-      });
-      setInterval(() => this.updateViewportBounds(), 2000);
-    }
-  }
-
-  updateViewportBounds() {
-    if (typeof window !== 'undefined' && window.stage) {
-      const stage = window.stage;
-      const scale = stage.scaleX();
-      const pos = stage.position();
-      
-      // Zone visible avec marge de 25% pour admin premium
-      const margin = 0.25;
-      const width = window.innerWidth / scale;
-      const height = window.innerHeight / scale;
-      const marginX = width * margin;
-      const marginY = height * margin;
-      
-      this.viewportBounds = {
-        x: (-pos.x / scale) - marginX,
-        y: (-pos.y / scale) - marginY,
-        width: width + (marginX * 2),
-        height: height + (marginY * 2)
-      };
-    }
-  }
-
-  // Vérifier si un point est dans la zone visible (optimisation admin)
-  isInViewport(x, y) {
-    if (!this.viewportBounds || this.clientType !== 'admin') return true;
-    
-    const bounds = this.viewportBounds;
-    return x >= bounds.x && x <= bounds.x + bounds.width &&
-           y >= bounds.y && y <= bounds.y + bounds.height;
-  }
-
-  // Admin ne dessine pas, seulement reçoit avec qualité maximale
-  createNetworkEffect(data) {
-    // Optimisation zone visible pour /chantilly
-    if (!this.isInViewport(data.x, data.y)) {
-      return;
-    }
-    
-    this.createLocalEffect(data.type, data.x, data.y, data.color, data.size);
-  }
-
-  createLocalEffect(type, x, y, color, size) {
-    const effectConfig = this.config.effects[type];
-    if (!effectConfig) return;
-    
-    const effectId = `${this.clientType}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    
-    switch(type) {
-      case 'sparkles': this.createSparkles(x, y, color, size, effectConfig, effectId); break;
-      case 'neon': this.createNeon(x, y, color, size, effectConfig, effectId); break;
-      case 'watercolor': this.createWatercolor(x, y, color, size, effectConfig, effectId); break;
-      case 'electric': this.createElectricTrace(x, y, color, size, effectConfig, effectId); break;
-      case 'fire': this.createFire(x, y, color, size, effectConfig, effectId); break;
-      case 'petals': this.createPetals(x, y, color, size, effectConfig, effectId); break;
-    }
-  }
-
-  // Effets ULTRA haute qualité pour admin premium
-  createSparkles(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.particles; i++) {
-      const offsetX = (Math.random() - 0.5) * enhancedSize * 2.2; // Plus d'étalement
-      const offsetY = (Math.random() - 0.5) * enhancedSize * 2.2;
-      const sparkleSize = 3 + Math.random() * 8; // Tailles maximales
-      const isPermanent = Math.random() < 0.6; // Plus de permanentes
-      
-      const sparkle = new Konva.Star({
-        x: x + offsetX, y: y + offsetY,
-        numPoints: 4, innerRadius: sparkleSize * 0.4, outerRadius: sparkleSize,
-        fill: color, rotation: Math.random() * 360,
-        opacity: isPermanent ? config.permanentOpacity : 1.0,
-        effectId, createdAt: Date.now(), isPermanent,
-        // Propriétés premium
-        shadowColor: color, shadowBlur: isPermanent ? 4 : 8, shadowOpacity: 0.5
-      });
-      
-      this.layer.add(sparkle);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(sparkle, config);
-      } else {
-        elements.push(sparkle);
-        this.animateSparkle(sparkle, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createNeon(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.particles; i++) {
-      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.4;
-      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.4;
-      const particleSize = 4 + Math.random() * 6; // Plus gros pour premium
-      const isPermanent = Math.random() < 0.6;
-      
-      const particle = new Konva.Circle({
-        x: x + offsetX, y: y + offsetY, radius: particleSize, fill: color,
-        opacity: isPermanent ? config.permanentOpacity : 0.95,
-        shadowColor: color, shadowBlur: isPermanent ? 12 : 25, shadowOpacity: isPermanent ? 0.8 : 0.95,
-        effectId, createdAt: Date.now(), isPermanent
-      });
-      
-      this.layer.add(particle);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(particle, config);
-      } else {
-        elements.push(particle);
-        this.animateNeon(particle, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createWatercolor(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.drops; i++) {
-      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.2;
-      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.2;
-      const dropSize = enhancedSize * (0.8 + Math.random() * 1.0); // Tailles premium
-      const isPermanent = Math.random() < 0.6;
-      
-      const drop = new Konva.Circle({
-        x: x + offsetX, y: y + offsetY, radius: dropSize, fill: color,
-        opacity: isPermanent ? config.permanentOpacity : 0.7, // Plus visible
-        scaleX: 0.8 + Math.random() * 0.8, scaleY: 0.6 + Math.random() * 0.8,
-        effectId, createdAt: Date.now(), isPermanent
-      });
-      
-      this.layer.add(drop);
-      
-      if (isPermanent) {
-        drop.to({ 
-          radius: dropSize * 3.0, // Expansion maximale
-          scaleX: drop.scaleX() * 1.8, 
-          scaleY: drop.scaleY() * 1.7, 
-          duration: 4, 
-          easing: Konva.Easings.EaseOut 
-        });
-        this.trackPermanentTrace(drop, config);
-      } else {
-        elements.push(drop);
-        this.animateWatercolor(drop, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  // PREMIUM : Electric avec tracé déformé ultra complexe
-  createElectricTrace(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.bolts; i++) {
-      const points = this.generatePremiumElectricPath(x, y, enhancedSize, config.segments);
-      const isPermanent = Math.random() < 0.5;
-      
-      const bolt = new Konva.Line({
-        points, stroke: color,
-        strokeWidth: isPermanent ? 2.5 : (4 + Math.random() * 5), // Épaisseur maximale
-        opacity: isPermanent ? config.permanentOpacity : 0.95,
-        lineCap: 'round', lineJoin: 'round',
-        shadowColor: color, shadowBlur: isPermanent ? 10 : 20, shadowOpacity: isPermanent ? 0.8 : 0.9,
-        effectId, createdAt: Date.now(), isPermanent,
-        originalPoints: [...points], animationOffset: Math.random() * Math.PI * 2
-      });
-      
-      this.layer.add(bolt);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(bolt, config);
-      } else {
-        elements.push(bolt);
-        this.animatePremiumElectricTrace(bolt, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  // Génération de tracé électrique premium ultra complexe
-  generatePremiumElectricPath(startX, startY, size, segments) {
-    const points = [startX, startY];
-    let currentX = startX, currentY = startY;
-    
-    for (let i = 0; i < segments; i++) {
-      const baseAngle = Math.random() * Math.PI * 2;
-      const deviation = (Math.random() - 0.5) * Math.PI * 1.0; // Déviation maximale
-      const angle = baseAngle + deviation;
-      
-      const distance = (Math.random() * size * 1.5) + (size * 0.6); // Distance premium
-      const nextX = currentX + Math.cos(angle) * distance;
-      const nextY = currentY + Math.sin(angle) * distance;
-      
-      // Plusieurs points intermédiaires pour courbes complexes
-      const midX1 = (currentX + nextX) / 3 + (Math.random() - 0.5) * size * 0.5;
-      const midY1 = (currentY + nextY) / 3 + (Math.random() - 0.5) * size * 0.5;
-      const midX2 = (currentX + nextX) * 2/3 + (Math.random() - 0.5) * size * 0.4;
-      const midY2 = (currentY + nextY) * 2/3 + (Math.random() - 0.5) * size * 0.4;
-      
-      points.push(midX1, midY1, midX2, midY2, nextX, nextY);
-      currentX = nextX;
-      currentY = nextY;
-    }
-    
-    return points;
-  }
-
-  createFire(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.flames; i++) {
-      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.2;
-      const offsetY = (Math.random() - 0.5) * enhancedSize * 0.8;
-      const isPermanent = Math.random() < 0.5;
-      
-      const flame = new Konva.Ellipse({
-        x: x + offsetX, y: y + offsetY,
-        radiusX: isPermanent ? 6 : (7 + Math.random() * 8), // Tailles maximales
-        radiusY: isPermanent ? 10 : (15 + Math.random() * 10),
-        fill: color, opacity: isPermanent ? config.permanentOpacity : 0.85,
-        shadowColor: '#FF4500', shadowBlur: isPermanent ? 8 : 20, shadowOpacity: isPermanent ? 0.7 : 0.8,
-        effectId, createdAt: Date.now(), isPermanent
-      });
-      
-      this.layer.add(flame);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(flame, config);
-      } else {
-        elements.push(flame);
-        this.animatePremiumFire(flame, config.duration, i);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  createPetals(x, y, color, size, config, effectId) {
-    const elements = [];
-    const enhancedSize = size * config.sizeMultiplier;
-    
-    for (let i = 0; i < config.count; i++) {
-      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.4;
-      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.4;
-      const petalSize = enhancedSize * (0.7 + Math.random() * 0.8); // Tailles premium
-      const isPermanent = Math.random() < 0.6;
-      
-      const petal = new Konva.Ellipse({
-        x: x + offsetX, y: y + offsetY,
-        radiusX: petalSize, radiusY: petalSize * 0.6, fill: color,
-        opacity: isPermanent ? config.permanentOpacity : (0.85 + Math.random() * 0.15),
-        rotation: Math.random() * 360,
-        scaleX: 0.8 + Math.random() * 0.8, scaleY: 0.6 + Math.random() * 0.8,
-        effectId, createdAt: Date.now(), isPermanent
-      });
-      
-      this.layer.add(petal);
-      
-      if (isPermanent) {
-        this.trackPermanentTrace(petal, config);
-      } else {
-        elements.push(petal);
-        this.animatePremiumPetals(petal, config.duration, i, enhancedSize);
-      }
-    }
-    this.trackEffect(effectId, elements, config.duration);
-  }
-
-  // ANIMATIONS PREMIUM ultra haute qualité pour admin
-  animateSparkle(sparkle, duration, index) {
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const randomFactor = 0.5 + Math.random() * 0.6; // Variabilité maximale
-      const scale = 1.1 + Math.sin(frame.time * (0.010 + randomFactor * 0.006) + index * 0.8) * 0.8;
-      const rotation = sparkle.rotation() + (3.5 + Math.random() * 3);
-      const opacity = Math.max(0, 1.0 - progress * (0.4 + Math.random() * 0.3));
-      const glow = 6 + Math.sin(frame.time * 0.015 + index) * 4;
-      
-      sparkle.scaleX(scale).scaleY(scale).rotation(rotation).opacity(opacity).shadowBlur(glow);
-      
-      if (progress >= 1 || opacity <= 0) {
-        sparkle.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  animateNeon(particle, duration, index) {
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const randomFactor = 0.7 + Math.random() * 0.7;
-      const glow = 20 + Math.sin(frame.time * (0.012 + randomFactor * 0.007) + index * 1.0) * 15;
-      const opacity = Math.max(0, 0.95 - progress * (0.3 + Math.random() * 0.2));
-      const pulse = 1 + Math.sin(frame.time * (0.008 + randomFactor * 0.005) + index) * 0.7;
-      
-      particle.shadowBlur(glow).opacity(opacity).scaleX(pulse).scaleY(pulse);
-      
-      if (progress >= 1 || opacity <= 0) {
-        particle.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  animateWatercolor(drop, duration, index) {
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const expansion = 1 + progress * (3.5 + Math.random() * 1.0); // Expansion maximale
-      const opacity = Math.max(0, 0.7 - progress * (0.2 + Math.random() * 0.15));
-      const organic = Math.sin(frame.time * (0.005 + Math.random() * 0.004) + index) * 0.4;
-      
-      drop.scaleX(expansion + organic).scaleY(expansion + organic * 0.9).opacity(opacity);
-      
-      if (progress >= 1 || opacity <= 0) {
-        drop.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  // PREMIUM animation pour tracé électrique ultra complexe
-  animatePremiumElectricTrace(bolt, duration, index) {
-    const originalPoints = bolt.originalPoints;
-    const animationOffset = bolt.animationOffset;
-    
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const flicker = 0.7 + Math.sin(frame.time * (0.08 + Math.random() * 0.06) + index * 2.5) * 0.3;
-      const glow = 15 + Math.sin(frame.time * (0.05 + Math.random() * 0.03) + index) * 12;
-      const opacity = Math.max(0, 0.95 - progress * (0.3 + Math.random() * 0.2));
-      
-      // Déformation ultra complexe du tracé
-      const deformedPoints = [];
-      for (let i = 0; i < originalPoints.length; i += 2) {
-        const x = originalPoints[i];
-        const y = originalPoints[i + 1];
-        
-        // Déformations multiples superposées
-        const deformX1 = Math.sin(frame.time * 0.014 + animationOffset + i * 0.15) * 5;
-        const deformY1 = Math.cos(frame.time * 0.016 + animationOffset + i * 0.15) * 4;
-        const deformX2 = Math.sin(frame.time * 0.008 + i * 0.08) * 2;
-        const deformY2 = Math.cos(frame.time * 0.010 + i * 0.08) * 2;
-        
-        deformedPoints.push(x + deformX1 + deformX2, y + deformY1 + deformY2);
-      }
-      
-      bolt.points(deformedPoints);
-      bolt.opacity(flicker * opacity).shadowBlur(glow);
-      
-      if (progress >= 1 || opacity <= 0) {
-        bolt.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  animatePremiumFire(flame, duration, index) {
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const randomFactor = 0.6 + Math.random() * 0.8;
-      const flicker = 0.9 + Math.sin(frame.time * (0.025 + randomFactor * 0.015) + index * 0.9) * 0.4;
-      const rise = flame.y() - (2.5 + Math.random() * 1.2);
-      const sway = Math.sin(frame.time * (0.018 + randomFactor * 0.008) + index) * (4 + Math.random() * 2);
-      const opacity = Math.max(0, 0.85 - progress * (0.2 + Math.random() * 0.2));
-      const intensity = 15 + Math.sin(frame.time * 0.03 + index) * 8;
-      
-      flame.scaleX(flicker).scaleY(flicker * 1.6).y(rise).x(flame.x() + sway * 0.2)
-           .opacity(opacity).shadowBlur(intensity);
-      
-      if (progress >= 1 || opacity <= 0) {
-        flame.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  animatePremiumPetals(petal, duration, index, size) {
-    const animation = new Konva.Animation((frame) => {
-      const progress = frame.time / duration;
-      const randomFactor = 0.5 + Math.random() * 0.9;
-      const rotation = petal.rotation() + (2.2 + Math.random() * 1.8);
-      const fall = petal.y() + (2.5 + Math.random() * 1.2);
-      const sway = Math.sin(frame.time * (0.014 + randomFactor * 0.008) + index) * (4 + Math.random() * 2);
-      const opacity = Math.max(0, petal.opacity() - progress * (0.12 + Math.random() * 0.1));
-      const flutter = 0.8 + Math.sin(frame.time * (0.017 + randomFactor * 0.010) + index) * 0.4;
-      
-      petal.rotation(rotation).y(fall).x(petal.x() + sway * 0.12)
-           .opacity(opacity).scaleX(flutter).scaleY(flutter * 0.8);
-      
-      if (progress >= 1 || opacity <= 0) {
-        petal.destroy();
-        animation.stop();
-      }
-    }, this.layer);
-    animation.start();
-  }
-
-  // Système de vieillissement PREMIUM pour admin
-  trackPermanentTrace(element, config) {
-    if (this.permanentCount >= this.maxPermanent) {
-      const oldestId = this.permanentTraces.keys().next().value;
-      if (oldestId) {
-        const oldTrace = this.permanentTraces.get(oldestId);
-        if (oldTrace.element && !oldTrace.element.isDestroyed()) {
-          oldTrace.element.destroy();
-        }
-        this.permanentTraces.delete(oldestId);
-        this.permanentCount--;
-      }
-    }
-    
-    const traceId = Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-    this.

@@ -5,6 +5,83 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin – Picturævox</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Styles spécifiques admin */
+    .admin-toolbar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 12px;
+      background-color: rgba(20, 20, 20, 0.95);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 1000;
+      backdrop-filter: blur(10px);
+      border: 2px solid #ff8c00;
+    }
+    
+    .admin-toolbar .tool-btn {
+      width: 40px;
+      height: 40px;
+      font-size: 18px;
+      border: none;
+      border-radius: 6px;
+      background-color: #444;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .admin-toolbar .tool-btn:hover {
+      background-color: #666;
+      transform: scale(1.05);
+    }
+    
+    .admin-toolbar .tool-btn.active {
+      background-color: #ff8c00;
+      box-shadow: 0 0 8px rgba(255, 140, 0, 0.5);
+    }
+    
+    .divider {
+      width: 1px;
+      height: 30px;
+      background-color: #666;
+      margin: 0 4px;
+    }
+    
+    #hide-ui {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 2000;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 50%;
+      background-color: rgba(0,0,0,0.8);
+      color: white;
+      cursor: pointer;
+      font-size: 16px;
+      border: 1px solid #666;
+    }
+    
+    #minimap {
+      position: fixed;
+      bottom: 80px;
+      right: 10px;
+      border: 2px solid #ff8c00;
+      background: #111;
+      z-index: 1000;
+      border-radius: 4px;
+    }
+  </style>
 </head>
 <body>
   <div id="canvas-container"></div>
@@ -12,11 +89,11 @@
   <!-- Bouton masquer UI (toujours visible) -->
   <button id="hide-ui" class="tool-btn" title="Masquer interface">👁️</button>
 
-  <div class="toolbar admin-toolbar">
+  <div class="admin-toolbar">
     <button id="pan" class="tool-btn active" title="Déplacement">✋</button>
-    <button id="zoom-in" class="tool-btn" title="Zoom +">➕</button>
-    <button id="zoom-out" class="tool-btn" title="Zoom -">➖</button>
-    <button id="reset-zoom" class="tool-btn" title="Reset">🔄</button>
+    <button id="zoom-in" class="tool-btn" title="Zoom +">🔍+</button>
+    <button id="zoom-out" class="tool-btn" title="Zoom -">🔍-</button>
+    <button id="reset-zoom" class="tool-btn" title="Reset vue">🎯</button>
 
     <div class="divider"></div>
 
@@ -27,15 +104,15 @@
 
     <button id="eraser" class="tool-btn" title="Gomme libre">🧽</button>
     <button id="clear-canvas" class="tool-btn" title="Tout effacer">🧼</button>
+    
+    <div class="divider"></div>
+    
     <button id="export" class="tool-btn" title="Exporter PNG">📷</button>
-    <button id="back-home" class="tool-btn" title="Retour utilisateur">↩️</button>
+    <button id="back-home" class="tool-btn" title="Retour utilisateur">🏠</button>
   </div>
 
-  <canvas id="minimap" width="120" height="120"
-    style="position:fixed; bottom:80px; right:10px; border:1px solid #555; background:#111; z-index:1000;">
-  </canvas>
+  <canvas id="minimap" width="120" height="120"></canvas>
 
-  <!-- SCRIPTS SIMPLIFIÉS - BRUSHMANAGER INTÉGRÉ DANS ADMIN.JS -->
   <script src="https://cdn.jsdelivr.net/npm/konva@9.2.0/konva.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="admin.js"></script>
