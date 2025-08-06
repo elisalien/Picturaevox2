@@ -21,7 +21,7 @@
       <button id="petals" class="tool-btn" title="Pétales">🌸</button>
       <button id="eraser" class="tool-btn" title="Gomme">🧽</button>
       <button id="pan" class="tool-btn" title="Déplacement">✋</button>
-      <button id="shapes" class="tool-btn" title="Formes">🔺</button>
+      <button id="undo" class="tool-btn" title="Annuler (Ctrl+Z)">↶</button>
     </div>
 
     <div class="colors">
@@ -30,18 +30,13 @@
       <div class="color-btn" data-color="#40C4FF" style="background-color:#40C4FF;"></div>
       <div class="color-btn" data-color="#69F0AE" style="background-color:#69F0AE;"></div>
       <div class="color-btn" data-color="#E040FB" style="background-color:#E040FB;"></div>
+      <div class="color-btn" data-color="#FFFFFF" style="background-color:#FFFFFF; border: 2px solid #666;"></div>
     </div>
 
     <input type="range" id="size-slider" min="1" max="40" value="4" />
   </div>
 
-  <!-- Mini palette formes (masquée par défaut) -->
-  <div id="shapes-palette" class="shapes-palette" style="display: none;">
-    <button class="shape-btn-mini" data-shape="circle" title="Cercle">⭕</button>
-    <button class="shape-btn-mini" data-shape="rectangle" title="Rectangle">⬜</button>
-    <button class="shape-btn-mini" data-shape="line" title="Ligne">📏</button>
-  </div>
-  
+  <!-- Mini palette formes (masquée par défaut) - SUPPRIMÉE car remplacée par Ctrl+Z -->
 
   <!-- SCRIPTS SIMPLIFIÉS - BRUSHMANAGER INTÉGRÉ DANS APP.JS -->
   <script src="https://cdn.jsdelivr.net/npm/konva@9.2.0/konva.min.js"></script>

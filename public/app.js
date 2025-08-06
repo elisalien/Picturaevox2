@@ -1,4 +1,4 @@
-// public/app.js - VERSION AVEC BRUSHMANAGER INTÉGRÉ
+// public/app.js - VERSION AVEC BRUSHMANAGER AMÉLIORÉ
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -11,7 +11,7 @@ stage.add(layer);
 // Rendre stage disponible globalement
 window.stage = stage;
 
-// === BRUSHMANAGER INTÉGRÉ DIRECTEMENT ===
+// === BRUSHMANAGER AMÉLIORÉ INTÉGRÉ DIRECTEMENT ===
 class BrushManager {
   constructor(clientType, layer, socket) {
     this.clientType = clientType;
@@ -28,98 +28,51 @@ class BrushManager {
     this.throttleTime = this.config.throttleTime;
     this.cleanupInterval = this.config.cleanupInterval;
     
-    if (this.clientType === 'admin') {
-      this.setupViewportTracking();
-    }
-    
     setInterval(() => this.cleanup(), this.cleanupInterval);
-    console.log(`✅ BrushManager ready for ${clientType} with quality:`, this.config.quality);
+    // Performance monitoring périodique
+    setInterval(() => this.adaptQualityToPerformance(), 30000);
+    console.log(`✅ Enhanced BrushManager ready for ${clientType} with quality:`, this.config.quality);
   }
 
   getConfig() {
     const configs = {
       public: {
-        quality: 'low',
-        maxPermanent: 100,
-        throttleTime: 500,
+        quality: 'enhanced_low',
+        maxPermanent: 120, // Augmenté de 100 → 120
+        throttleTime: 400, // Réduit de 500 → 400ms
         cleanupInterval: 20000,
         effects: {
-          sparkles: { particles: 2, duration: 800, permanentOpacity: 0.05, fadeStartTime: 10 },
-          neon: { particles: 2, duration: 1000, permanentOpacity: 0.06, fadeStartTime: 10 },
-          watercolor: { drops: 1, duration: 1000, permanentOpacity: 0.03, fadeStartTime: 10 },
-          electric: { bolts: 1, segments: 3, duration: 800, permanentOpacity: 0.04, fadeStartTime: 10 },
-          fire: { flames: 2, duration: 800, permanentOpacity: 0.02, fadeStartTime: 10 },
-          petals: { count: 1, duration: 1500, permanentOpacity: 0.04, fadeStartTime: 10 }
-        }
-      },
-      atelier: {
-        quality: 'medium',
-        maxPermanent: 200,
-        throttleTime: 300,
-        cleanupInterval: 25000,
-        effects: {
-          sparkles: { particles: 4, duration: 1200, permanentOpacity: 0.08, fadeStartTime: 15 },
-          neon: { particles: 4, duration: 1500, permanentOpacity: 0.1, fadeStartTime: 15 },
-          watercolor: { drops: 3, duration: 1500, permanentOpacity: 0.05, fadeStartTime: 15 },
-          electric: { bolts: 2, segments: 5, duration: 1200, permanentOpacity: 0.06, fadeStartTime: 15 },
-          fire: { flames: 3, duration: 1200, permanentOpacity: 0.03, fadeStartTime: 15 },
-          petals: { count: 3, duration: 2500, permanentOpacity: 0.07, fadeStartTime: 15 }
-        }
-      },
-      admin: {
-        quality: 'high',
-        maxPermanent: 300,
-        throttleTime: 150,
-        cleanupInterval: 30000,
-        effects: {
-          sparkles: { particles: 6, duration: 1800, permanentOpacity: 0.12, fadeStartTime: 20 },
-          neon: { particles: 6, duration: 2000, permanentOpacity: 0.15, fadeStartTime: 20 },
-          watercolor: { drops: 4, duration: 2000, permanentOpacity: 0.08, fadeStartTime: 20 },
-          electric: { bolts: 3, segments: 7, duration: 1800, permanentOpacity: 0.08, fadeStartTime: 20 },
-          fire: { flames: 5, duration: 1800, permanentOpacity: 0.04, fadeStartTime: 20 },
-          petals: { count: 4, duration: 3500, permanentOpacity: 0.1, fadeStartTime: 20 }
+          sparkles: { 
+            particles: 4, // Augmenté de 2 → 4
+            duration: 1200, // Augmenté de 800 → 1200ms
+            permanentOpacity: 0.12, // Augmenté de 0.05 → 0.12
+            fadeStartTime: 15, // Augmenté de 10 → 15s
+            sizeMultiplier: 1.8
+          },
+          neon: { 
+            particles: 4, duration: 1400, permanentOpacity: 0.15, 
+            fadeStartTime: 15, sizeMultiplier: 1.6
+          },
+          watercolor: { 
+            drops: 3, duration: 1500, permanentOpacity: 0.08, 
+            fadeStartTime: 15, sizeMultiplier: 1.4
+          },
+          electric: { 
+            bolts: 2, segments: 4, duration: 1100, permanentOpacity: 0.10, 
+            fadeStartTime: 15, sizeMultiplier: 1.3
+          },
+          fire: { 
+            flames: 4, duration: 1200, permanentOpacity: 0.06, 
+            fadeStartTime: 15, sizeMultiplier: 1.5
+          },
+          petals: { 
+            count: 3, duration: 2200, permanentOpacity: 0.09, 
+            fadeStartTime: 15, sizeMultiplier: 1.3
+          }
         }
       }
     };
     return configs[this.clientType] || configs.public;
-  }
-
-  setupViewportTracking() {
-    this.updateViewportBounds();
-    if (typeof window !== 'undefined' && window.stage) {
-      window.stage.on('dragend', () => this.updateViewportBounds());
-      window.stage.on('wheel', () => {
-        setTimeout(() => this.updateViewportBounds(), 50);
-      });
-      setInterval(() => this.updateViewportBounds(), 2000);
-    }
-  }
-
-  updateViewportBounds() {
-    if (typeof window !== 'undefined' && window.stage) {
-      const stage = window.stage;
-      const scale = stage.scaleX();
-      const pos = stage.position();
-      const margin = 0.2;
-      const width = window.innerWidth / scale;
-      const height = window.innerHeight / scale;
-      const marginX = width * margin;
-      const marginY = height * margin;
-      
-      this.viewportBounds = {
-        x: (-pos.x / scale) - marginX,
-        y: (-pos.y / scale) - marginY,
-        width: width + (marginX * 2),
-        height: height + (marginY * 2)
-      };
-    }
-  }
-
-  isInViewport(x, y) {
-    if (!this.viewportBounds || this.clientType !== 'admin') return true;
-    const bounds = this.viewportBounds;
-    return x >= bounds.x && x <= bounds.x + bounds.width &&
-           y >= bounds.y && y <= bounds.y + bounds.height;
   }
 
   createAndEmitEffect(type, x, y, color, size) {
@@ -139,7 +92,6 @@ class BrushManager {
   }
 
   createNetworkEffect(data) {
-    if (!this.isInViewport(data.x, data.y)) return;
     this.createLocalEffect(data.type, data.x, data.y, data.color, data.size);
   }
 
@@ -153,7 +105,7 @@ class BrushManager {
       case 'sparkles': this.createSparkles(x, y, color, size, effectConfig, effectId); break;
       case 'neon': this.createNeon(x, y, color, size, effectConfig, effectId); break;
       case 'watercolor': this.createWatercolor(x, y, color, size, effectConfig, effectId); break;
-      case 'electric': this.createElectric(x, y, color, size, effectConfig, effectId); break;
+      case 'electric': this.createElectricTrace(x, y, color, size, effectConfig, effectId); break;
       case 'fire': this.createFire(x, y, color, size, effectConfig, effectId); break;
       case 'petals': this.createPetals(x, y, color, size, effectConfig, effectId); break;
     }
@@ -161,17 +113,19 @@ class BrushManager {
 
   createSparkles(x, y, color, size, config, effectId) {
     const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
     for (let i = 0; i < config.particles; i++) {
-      const offsetX = (Math.random() - 0.5) * size * 1.5;
-      const offsetY = (Math.random() - 0.5) * size * 1.5;
-      const sparkleSize = 1 + Math.random() * 3;
-      const isPermanent = Math.random() < 0.4;
+      const offsetX = (Math.random() - 0.5) * enhancedSize * 2.0;
+      const offsetY = (Math.random() - 0.5) * enhancedSize * 2.0;
+      const sparkleSize = 2 + Math.random() * 6;
+      const isPermanent = Math.random() < 0.5;
       
       const sparkle = new Konva.Star({
         x: x + offsetX, y: y + offsetY,
         numPoints: 4, innerRadius: sparkleSize * 0.4, outerRadius: sparkleSize,
         fill: color, rotation: Math.random() * 360,
-        opacity: isPermanent ? config.permanentOpacity : 0.9,
+        opacity: isPermanent ? config.permanentOpacity : 1.0,
         effectId, createdAt: Date.now(), isPermanent
       });
       
@@ -189,16 +143,18 @@ class BrushManager {
 
   createNeon(x, y, color, size, config, effectId) {
     const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
     for (let i = 0; i < config.particles; i++) {
-      const offsetX = (Math.random() - 0.5) * size * 0.8;
-      const offsetY = (Math.random() - 0.5) * size * 0.8;
-      const particleSize = 2 + Math.random() * 3;
-      const isPermanent = Math.random() < 0.4;
+      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.2;
+      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.2;
+      const particleSize = 3 + Math.random() * 5;
+      const isPermanent = Math.random() < 0.5;
       
       const particle = new Konva.Circle({
         x: x + offsetX, y: y + offsetY, radius: particleSize, fill: color,
-        opacity: isPermanent ? config.permanentOpacity : 0.8,
-        shadowColor: color, shadowBlur: isPermanent ? 4 : 12, shadowOpacity: isPermanent ? 0.4 : 0.8,
+        opacity: isPermanent ? config.permanentOpacity : 0.9,
+        shadowColor: color, shadowBlur: isPermanent ? 8 : 18, shadowOpacity: isPermanent ? 0.6 : 0.9,
         effectId, createdAt: Date.now(), isPermanent
       });
       
@@ -216,23 +172,25 @@ class BrushManager {
 
   createWatercolor(x, y, color, size, config, effectId) {
     const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
     for (let i = 0; i < config.drops; i++) {
-      const offsetX = (Math.random() - 0.5) * size * 0.6;
-      const offsetY = (Math.random() - 0.5) * size * 0.6;
-      const dropSize = size * (0.4 + Math.random() * 0.6);
-      const isPermanent = Math.random() < 0.4;
+      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.0;
+      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.0;
+      const dropSize = enhancedSize * (0.6 + Math.random() * 0.8);
+      const isPermanent = Math.random() < 0.5;
       
       const drop = new Konva.Circle({
         x: x + offsetX, y: y + offsetY, radius: dropSize, fill: color,
-        opacity: isPermanent ? config.permanentOpacity : 0.3,
-        scaleX: 0.8 + Math.random() * 0.4, scaleY: 0.6 + Math.random() * 0.4,
+        opacity: isPermanent ? config.permanentOpacity : 0.5,
+        scaleX: 0.8 + Math.random() * 0.6, scaleY: 0.6 + Math.random() * 0.6,
         effectId, createdAt: Date.now(), isPermanent
       });
       
       this.layer.add(drop);
       
       if (isPermanent) {
-        drop.to({ radius: dropSize * 1.8, scaleX: drop.scaleX() * 1.3, scaleY: drop.scaleY() * 1.2, duration: 2, easing: Konva.Easings.EaseOut });
+        drop.to({ radius: dropSize * 2.5, scaleX: drop.scaleX() * 1.6, scaleY: drop.scaleY() * 1.5, duration: 3, easing: Konva.Easings.EaseOut });
         this.trackPermanentTrace(drop, config);
       } else {
         elements.push(drop);
@@ -242,29 +200,23 @@ class BrushManager {
     this.trackEffect(effectId, elements, config.duration);
   }
 
-  createElectric(x, y, color, size, config, effectId) {
+  // NOUVEAU : Electric avec tracé déformé
+  createElectricTrace(x, y, color, size, config, effectId) {
     const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
     for (let i = 0; i < config.bolts; i++) {
-      const points = [x, y];
-      let currentX = x, currentY = y;
-      
-      for (let j = 0; j < config.segments; j++) {
-        const angle = Math.random() * Math.PI * 2;
-        const distance = (Math.random() * size * 0.8) + (size * 0.3);
-        currentX += Math.cos(angle) * distance;
-        currentY += Math.sin(angle) * distance;
-        points.push(currentX, currentY);
-      }
-      
-      const isPermanent = Math.random() < 0.3;
+      const points = this.generateElectricPath(x, y, enhancedSize, config.segments);
+      const isPermanent = Math.random() < 0.4;
       
       const bolt = new Konva.Line({
         points, stroke: color,
-        strokeWidth: isPermanent ? 0.8 : (1.5 + Math.random() * 2),
-        opacity: isPermanent ? config.permanentOpacity : 0.8,
+        strokeWidth: isPermanent ? 1.5 : (2.5 + Math.random() * 4),
+        opacity: isPermanent ? config.permanentOpacity : 0.9,
         lineCap: 'round', lineJoin: 'round',
-        shadowColor: color, shadowBlur: isPermanent ? 3 : 8, shadowOpacity: isPermanent ? 0.4 : 0.6,
-        effectId, createdAt: Date.now(), isPermanent
+        shadowColor: color, shadowBlur: isPermanent ? 6 : 15, shadowOpacity: isPermanent ? 0.6 : 0.8,
+        effectId, createdAt: Date.now(), isPermanent,
+        originalPoints: [...points], animationOffset: Math.random() * Math.PI * 2
       });
       
       this.layer.add(bolt);
@@ -273,25 +225,51 @@ class BrushManager {
         this.trackPermanentTrace(bolt, config);
       } else {
         elements.push(bolt);
-        this.animateElectric(bolt, config.duration, i);
+        this.animateElectricTrace(bolt, config.duration, i);
       }
     }
     this.trackEffect(effectId, elements, config.duration);
   }
 
+  generateElectricPath(startX, startY, size, segments) {
+    const points = [startX, startY];
+    let currentX = startX, currentY = startY;
+    
+    for (let i = 0; i < segments; i++) {
+      const baseAngle = Math.random() * Math.PI * 2;
+      const deviation = (Math.random() - 0.5) * Math.PI * 0.8;
+      const angle = baseAngle + deviation;
+      
+      const distance = (Math.random() * size * 1.2) + (size * 0.4);
+      const nextX = currentX + Math.cos(angle) * distance;
+      const nextY = currentY + Math.sin(angle) * distance;
+      
+      const midX = (currentX + nextX) / 2 + (Math.random() - 0.5) * size * 0.3;
+      const midY = (currentY + nextY) / 2 + (Math.random() - 0.5) * size * 0.3;
+      
+      points.push(midX, midY, nextX, nextY);
+      currentX = nextX;
+      currentY = nextY;
+    }
+    
+    return points;
+  }
+
   createFire(x, y, color, size, config, effectId) {
     const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
     for (let i = 0; i < config.flames; i++) {
-      const offsetX = (Math.random() - 0.5) * size * 0.7;
-      const offsetY = (Math.random() - 0.5) * size * 0.4;
-      const isPermanent = Math.random() < 0.3;
+      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.0;
+      const offsetY = (Math.random() - 0.5) * enhancedSize * 0.6;
+      const isPermanent = Math.random() < 0.4;
       
       const flame = new Konva.Ellipse({
         x: x + offsetX, y: y + offsetY,
-        radiusX: isPermanent ? 2 : (3 + Math.random() * 3),
-        radiusY: isPermanent ? 3 : (6 + Math.random() * 4),
-        fill: color, opacity: isPermanent ? config.permanentOpacity : 0.7,
-        shadowColor: '#FF4500', shadowBlur: isPermanent ? 2 : 10, shadowOpacity: isPermanent ? 0.3 : 0.5,
+        radiusX: isPermanent ? 4 : (5 + Math.random() * 6),
+        radiusY: isPermanent ? 6 : (10 + Math.random() * 8),
+        fill: color, opacity: isPermanent ? config.permanentOpacity : 0.8,
+        shadowColor: '#FF4500', shadowBlur: isPermanent ? 5 : 16, shadowOpacity: isPermanent ? 0.5 : 0.7,
         effectId, createdAt: Date.now(), isPermanent
       });
       
@@ -309,18 +287,20 @@ class BrushManager {
 
   createPetals(x, y, color, size, config, effectId) {
     const elements = [];
+    const enhancedSize = size * config.sizeMultiplier;
+    
     for (let i = 0; i < config.count; i++) {
-      const offsetX = (Math.random() - 0.5) * size * 0.8;
-      const offsetY = (Math.random() - 0.5) * size * 0.8;
-      const petalSize = size * (0.3 + Math.random() * 0.4);
-      const isPermanent = Math.random() < 0.4;
+      const offsetX = (Math.random() - 0.5) * enhancedSize * 1.2;
+      const offsetY = (Math.random() - 0.5) * enhancedSize * 1.2;
+      const petalSize = enhancedSize * (0.5 + Math.random() * 0.6);
+      const isPermanent = Math.random() < 0.5;
       
       const petal = new Konva.Ellipse({
         x: x + offsetX, y: y + offsetY,
-        radiusX: petalSize, radiusY: petalSize * 0.5, fill: color,
-        opacity: isPermanent ? config.permanentOpacity : (0.7 + Math.random() * 0.2),
+        radiusX: petalSize, radiusY: petalSize * 0.6, fill: color,
+        opacity: isPermanent ? config.permanentOpacity : (0.8 + Math.random() * 0.2),
         rotation: Math.random() * 360,
-        scaleX: 0.8 + Math.random() * 0.4, scaleY: 0.6 + Math.random() * 0.4,
+        scaleX: 0.8 + Math.random() * 0.6, scaleY: 0.6 + Math.random() * 0.6,
         effectId, createdAt: Date.now(), isPermanent
       });
       
@@ -330,19 +310,20 @@ class BrushManager {
         this.trackPermanentTrace(petal, config);
       } else {
         elements.push(petal);
-        this.animatePetals(petal, config.duration, i, size);
+        this.animatePetals(petal, config.duration, i, enhancedSize);
       }
     }
     this.trackEffect(effectId, elements, config.duration);
   }
 
-  // Animations
+  // ANIMATIONS AMÉLIORÉES
   animateSparkle(sparkle, duration, index) {
     const animation = new Konva.Animation((frame) => {
       const progress = frame.time / duration;
-      const scale = 0.8 + Math.sin(frame.time * 0.01 + index * 0.5) * 0.4;
-      const rotation = sparkle.rotation() + 3;
-      const opacity = Math.max(0, 0.9 - progress * 0.8);
+      const randomFactor = 0.3 + Math.random() * 0.4;
+      const scale = 0.9 + Math.sin(frame.time * (0.008 + randomFactor * 0.004) + index * 0.6) * 0.6;
+      const rotation = sparkle.rotation() + (2.5 + Math.random() * 2);
+      const opacity = Math.max(0, 1.0 - progress * (0.6 + Math.random() * 0.3));
       
       sparkle.scaleX(scale).scaleY(scale).rotation(rotation).opacity(opacity);
       
@@ -357,9 +338,10 @@ class BrushManager {
   animateNeon(particle, duration, index) {
     const animation = new Konva.Animation((frame) => {
       const progress = frame.time / duration;
-      const glow = 8 + Math.sin(frame.time * 0.012 + index * 0.7) * 6;
-      const opacity = Math.max(0, 0.8 - progress * 0.6);
-      const pulse = 1 + Math.sin(frame.time * 0.008 + index) * 0.3;
+      const randomFactor = 0.5 + Math.random() * 0.5;
+      const glow = 12 + Math.sin(frame.time * (0.01 + randomFactor * 0.005) + index * 0.8) * 10;
+      const opacity = Math.max(0, 0.9 - progress * (0.4 + Math.random() * 0.2));
+      const pulse = 1 + Math.sin(frame.time * (0.006 + randomFactor * 0.003) + index) * 0.5;
       
       particle.shadowBlur(glow).opacity(opacity).scaleX(pulse).scaleY(pulse);
       
@@ -374,11 +356,11 @@ class BrushManager {
   animateWatercolor(drop, duration, index) {
     const animation = new Konva.Animation((frame) => {
       const progress = frame.time / duration;
-      const expansion = 1 + progress * 2;
-      const opacity = Math.max(0, 0.3 - progress * 0.15);
-      const organic = Math.sin(frame.time * 0.004 + index) * 0.15;
+      const expansion = 1 + progress * (2.8 + Math.random() * 0.7);
+      const opacity = Math.max(0, 0.5 - progress * (0.15 + Math.random() * 0.1));
+      const organic = Math.sin(frame.time * (0.003 + Math.random() * 0.002) + index) * 0.3;
       
-      drop.scaleX(expansion + organic).scaleY(expansion + organic * 0.6).opacity(opacity);
+      drop.scaleX(expansion + organic).scaleY(expansion + organic * 0.7).opacity(opacity);
       
       if (progress >= 1 || opacity <= 0) {
         drop.destroy();
@@ -388,13 +370,26 @@ class BrushManager {
     animation.start();
   }
 
-  animateElectric(bolt, duration, index) {
+  animateElectricTrace(bolt, duration, index) {
+    const originalPoints = bolt.originalPoints;
+    const animationOffset = bolt.animationOffset;
+    
     const animation = new Konva.Animation((frame) => {
       const progress = frame.time / duration;
-      const flicker = 0.4 + Math.sin(frame.time * 0.08 + index * 2) * 0.6;
-      const glow = 5 + Math.sin(frame.time * 0.06 + index) * 4;
-      const opacity = Math.max(0, 0.8 - progress * 0.6);
+      const flicker = 0.5 + Math.sin(frame.time * (0.06 + Math.random() * 0.04) + index * 2) * 0.5;
+      const glow = 10 + Math.sin(frame.time * (0.04 + Math.random() * 0.02) + index) * 8;
+      const opacity = Math.max(0, 0.9 - progress * (0.4 + Math.random() * 0.2));
       
+      const deformedPoints = [];
+      for (let i = 0; i < originalPoints.length; i += 2) {
+        const x = originalPoints[i];
+        const y = originalPoints[i + 1];
+        const deformX = Math.sin(frame.time * 0.01 + animationOffset + i * 0.1) * 3;
+        const deformY = Math.cos(frame.time * 0.012 + animationOffset + i * 0.1) * 2;
+        deformedPoints.push(x + deformX, y + deformY);
+      }
+      
+      bolt.points(deformedPoints);
       bolt.opacity(flicker * opacity).shadowBlur(glow);
       
       if (progress >= 1 || opacity <= 0) {
@@ -408,12 +403,13 @@ class BrushManager {
   animateFire(flame, duration, index) {
     const animation = new Konva.Animation((frame) => {
       const progress = frame.time / duration;
-      const flicker = 0.8 + Math.sin(frame.time * 0.025 + index * 0.6) * 0.3;
-      const rise = flame.y() - 1.2;
-      const sway = Math.sin(frame.time * 0.018 + index) * 2;
-      const opacity = Math.max(0, 0.7 - progress * 0.5);
+      const randomFactor = 0.4 + Math.random() * 0.6;
+      const flicker = 0.9 + Math.sin(frame.time * (0.02 + randomFactor * 0.01) + index * 0.7) * 0.3;
+      const rise = flame.y() - (1.8 + Math.random() * 0.8);
+      const sway = Math.sin(frame.time * (0.015 + randomFactor * 0.005) + index) * (3 + Math.random());
+      const opacity = Math.max(0, 0.8 - progress * (0.3 + Math.random() * 0.2));
       
-      flame.scaleX(flicker).scaleY(flicker * 1.2).y(rise).x(flame.x() + sway * 0.1).opacity(opacity);
+      flame.scaleX(flicker).scaleY(flicker * 1.4).y(rise).x(flame.x() + sway * 0.15).opacity(opacity);
       
       if (progress >= 1 || opacity <= 0) {
         flame.destroy();
@@ -426,13 +422,14 @@ class BrushManager {
   animatePetals(petal, duration, index, size) {
     const animation = new Konva.Animation((frame) => {
       const progress = frame.time / duration;
-      const rotation = petal.rotation() + 2;
-      const fall = petal.y() + 1.5;
-      const sway = Math.sin(frame.time * 0.015 + index) * 2;
-      const opacity = Math.max(0, petal.opacity() - progress * 0.25);
-      const flutter = 0.9 + Math.sin(frame.time * 0.02 + index) * 0.2;
+      const randomFactor = 0.3 + Math.random() * 0.7;
+      const rotation = petal.rotation() + (1.8 + Math.random() * 1.2);
+      const fall = petal.y() + (2.0 + Math.random() * 0.8);
+      const sway = Math.sin(frame.time * (0.012 + randomFactor * 0.006) + index) * (3 + Math.random());
+      const opacity = Math.max(0, petal.opacity() - progress * (0.18 + Math.random() * 0.1));
+      const flutter = 0.8 + Math.sin(frame.time * (0.015 + randomFactor * 0.008) + index) * 0.3;
       
-      petal.rotation(rotation).y(fall).x(petal.x() + sway * 0.05)
+      petal.rotation(rotation).y(fall).x(petal.x() + sway * 0.08)
            .opacity(opacity).scaleX(flutter).scaleY(flutter * 0.7);
       
       if (progress >= 1 || opacity <= 0) {
@@ -460,7 +457,8 @@ class BrushManager {
     this.permanentTraces.set(traceId, {
       element, createdAt: Date.now(), config,
       fadeStartTime: config.fadeStartTime * 1000,
-      totalLifetime: 60000
+      totalLifetime: 90000, // 90 secondes pour public
+      qualityLevel: this.clientType
     });
     this.permanentCount++;
     this.startAgingProcess(traceId);
@@ -479,7 +477,7 @@ class BrushManager {
       
       if (age >= currentTrace.totalLifetime) {
         element.to({
-          opacity: 0, duration: 5,
+          opacity: 0, duration: 6, easing: Konva.Easings.EaseOut,
           onFinish: () => {
             if (!element.isDestroyed()) element.destroy();
             this.permanentTraces.delete(traceId);
@@ -490,37 +488,46 @@ class BrushManager {
       }
       
       if (age > currentTrace.fadeStartTime) {
-        if (age < 30000) {
-          const fadeProgress = (age - currentTrace.fadeStartTime) / (30000 - currentTrace.fadeStartTime);
-          const targetOpacity = currentTrace.config.permanentOpacity * (1 - fadeProgress * 0.5);
+        const midLifetime = currentTrace.totalLifetime * 0.6;
+        
+        if (age < midLifetime) {
+          const fadeProgress = (age - currentTrace.fadeStartTime) / (midLifetime - currentTrace.fadeStartTime);
+          const targetOpacity = currentTrace.config.permanentOpacity * (1 - fadeProgress * 0.3);
+          element.opacity(targetOpacity);
+          if (element.shadowBlur && element.shadowBlur() > 2) {
+            element.shadowBlur(Math.max(2, element.shadowBlur() * (1 - fadeProgress * 0.2)));
+          }
+        } else {
+          const finalFadeProgress = (age - midLifetime) / (currentTrace.totalLifetime - midLifetime);
+          const targetOpacity = currentTrace.config.permanentOpacity * 0.7 * (1 - finalFadeProgress * 0.7);
           element.opacity(targetOpacity);
           if (element.shadowBlur && element.shadowBlur() > 1) {
-            element.shadowBlur(Math.max(1, element.shadowBlur() * (1 - fadeProgress * 0.3)));
-          }
-        } else if (age < 60000) {
-          const finalFadeProgress = (age - 30000) / 30000;
-          const targetOpacity = currentTrace.config.permanentOpacity * 0.5 * (1 - finalFadeProgress * 0.8);
-          element.opacity(targetOpacity);
-          if (element.shadowBlur && element.shadowBlur() > 0.5) {
-            element.shadowBlur(Math.max(0.5, element.shadowBlur() * (1 - finalFadeProgress * 0.5)));
+            element.shadowBlur(Math.max(1, element.shadowBlur() * (1 - finalFadeProgress * 0.4)));
           }
         }
       }
-      setTimeout(checkAging, 2000);
+      setTimeout(checkAging, 2500);
     };
     setTimeout(checkAging, trace.fadeStartTime);
   }
 
   trackEffect(effectId, elements, duration) {
-    this.activeEffects.set(effectId, { elements, timestamp: Date.now(), duration });
-    setTimeout(() => this.removeEffect(effectId), duration + 1000);
+    this.activeEffects.set(effectId, { elements, timestamp: Date.now(), duration, qualityLevel: this.clientType });
+    setTimeout(() => this.removeEffect(effectId), duration + 2000);
     this.layer.batchDraw();
   }
 
   removeEffect(effectId) {
     const effect = this.activeEffects.get(effectId);
     if (effect) {
-      effect.elements.forEach(el => { if (!el.isDestroyed()) el.destroy(); });
+      effect.elements.forEach(el => { 
+        if (!el.isDestroyed()) {
+          el.to({
+            opacity: 0, duration: 0.5,
+            onFinish: () => { if (!el.isDestroyed()) el.destroy(); }
+          });
+        }
+      });
       this.activeEffects.delete(effectId);
     }
   }
@@ -530,7 +537,7 @@ class BrushManager {
     const expired = [];
     
     this.activeEffects.forEach((effect, effectId) => {
-      if (now - effect.timestamp > effect.duration + 5000) {
+      if (now - effect.timestamp > effect.duration + 4000) {
         expired.push(effectId);
       }
     });
@@ -539,7 +546,7 @@ class BrushManager {
     
     const expiredTraces = [];
     this.permanentTraces.forEach((trace, traceId) => {
-      if (now - trace.createdAt > trace.totalLifetime + 10000) {
+      if (now - trace.createdAt > trace.totalLifetime + 15000) {
         expiredTraces.push(traceId);
       }
     });
@@ -553,7 +560,30 @@ class BrushManager {
       this.permanentCount--;
     });
     
-    this.layer.batchDraw();
+    if (expired.length > 0 || expiredTraces.length > 0) {
+      this.layer.batchDraw();
+    }
+  }
+
+  adaptQualityToPerformance() {
+    const totalElements = this.activeEffects.size + this.permanentCount;
+    if (totalElements > this.maxPermanent * 0.8) {
+      const oldElements = [];
+      this.permanentTraces.forEach((trace, id) => {
+        if (Date.now() - trace.createdAt > trace.totalLifetime * 0.7) {
+          oldElements.push(id);
+        }
+      });
+      
+      oldElements.slice(0, Math.floor(oldElements.length * 0.3)).forEach(id => {
+        const trace = this.permanentTraces.get(id);
+        if (trace?.element && !trace.element.isDestroyed()) {
+          trace.element.destroy();
+        }
+        this.permanentTraces.delete(id);
+        this.permanentCount--;
+      });
+    }
   }
 
   clearPermanentTraces() {
@@ -564,6 +594,7 @@ class BrushManager {
     });
     this.permanentTraces.clear();
     this.permanentCount = 0;
+    this.layer.batchDraw();
   }
 
   cleanupUserEffects(socketId) {
@@ -575,7 +606,7 @@ class BrushManager {
   }
 }
 
-// === RESTE DU CODE APP.JS ===
+// === RESTE DU CODE APP.JS IDENTIQUE ===
 
 let currentTool  = 'brush';
 let currentColor = document.querySelector('.color-btn.active').dataset.color;
@@ -588,9 +619,9 @@ let isCreatingShape = false;
 let shapePreview = null;
 let shapeStartPos = null;
 
-// Initialisation du BrushManager
+// Initialisation du BrushManager amélioré
 const brushManager = new BrushManager('public', layer, socket);
-console.log('🎯 BrushManager loaded and ready!');
+console.log('🎯 Enhanced BrushManager loaded and ready!');
 
 // === UTILITAIRES ===
 function throttle(func, wait) {
@@ -634,30 +665,40 @@ const emitTextureThrottled = throttle((data) => {
 // Tool buttons
 document.querySelectorAll('.tool-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    // Gestion spéciale pour le bouton undo
+    if (btn.id === 'undo') {
+      handleUndo();
+      return;
+    }
+    
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentTool = btn.id;
     
     const cursor = currentTool === 'pan' ? 'grab' : 'crosshair';
     stage.container().style.cursor = cursor;
-    
-    const shapesPanel = document.getElementById('shapes-palette');
-    if (currentTool === 'shapes') {
-      shapesPanel.style.display = 'flex';
-    } else {
-      shapesPanel.style.display = 'none';
-    }
   });
 });
 
-// Gestion des formes simples
-document.querySelectorAll('.shape-btn-mini').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.shape-btn-mini').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentTool = 'shape-' + btn.dataset.shape;
-  });
-});
+// Fonction pour gérer l'undo avec notification visuelle
+function handleUndo() {
+  socket.emit('undo');
+  showUndoNotification();
+}
+
+// Fonction pour afficher une notification d'undo
+function showUndoNotification() {
+  const notification = document.createElement('div');
+  notification.className = 'undo-notification';
+  notification.textContent = 'Annulé ↶';
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.parentNode.removeChild(notification);
+    }
+  }, 800);
+}
 
 // Color selection
 document.querySelectorAll('.color-btn').forEach(btn => {
@@ -673,11 +714,11 @@ document.getElementById('size-slider').addEventListener('input', e => {
   currentSize = parseInt(e.target.value, 10);
 });
 
-// Raccourci Ctrl+Z pour undo
+// Raccourci Ctrl+Z pour undo avec notification
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'z') {
     e.preventDefault();
-    socket.emit('undo');
+    handleUndo();
   }
 });
 
@@ -712,7 +753,7 @@ stage.on('mousedown touchstart pointerdown', (evt) => {
     return;
   }
 
-  // BRUSH ANIMÉS - Utilisation du BrushManager intégré
+  // BRUSH ANIMÉS - Utilisation du BrushManager amélioré
   if (['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
     isDrawing = true;
     currentId = generateId();
@@ -777,7 +818,7 @@ stage.on('mousemove touchmove pointermove', (evt) => {
     return;
   }
 
-  // BRUSH ANIMÉS - Continuer l'effet avec BrushManager intégré
+  // BRUSH ANIMÉS - Continuer l'effet avec BrushManager amélioré
   if (['neon', 'fire', 'electric', 'sparkles', 'watercolor', 'petals'].includes(currentTool)) {
     brushManager.createAndEmitEffect(currentTool, scenePos.x, scenePos.y, currentColor, pressureSize);
     return;
@@ -997,5 +1038,16 @@ socket.on('shapeCreate', data => {
   }
 });
 
-console.log('✅ App.js loaded for public interface with integrated BrushManager');
-console.log('🎯 All brush effects should now work perfectly!');
+// NOUVEL ÉVÉNEMENT - Reset des brush effects par admin
+socket.on('adminResetBrushEffects', () => {
+  brushManager.clearPermanentTraces();
+  brushManager.activeEffects.clear();
+  layer.batchDraw();
+  
+  // Notification pour informer l'utilisateur
+  showUndoNotification('Effets réinitialisés par Admin ✨');
+  console.log('🎨 Admin reset: All brush effects cleared');
+});
+
+console.log('✅ Enhanced App.js loaded for public interface with improved BrushManager');
+console.log('🎯 All enhanced brush effects ready: bigger particles, longer duration, better visibility!');
