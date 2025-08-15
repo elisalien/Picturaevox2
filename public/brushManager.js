@@ -874,7 +874,8 @@ class BrushManager {
     const effect = this.activeEffects.get(effectId);
     if (effect) {
       effect.elements.forEach(el => { 
-        if (!el.isDestroyed()) {
+        // ✅ CORRECTION : Konva utilise isDestroyed comme propriété, pas méthode
+        if (el && !el.isDestroyed) {
           el.destroy();
         }
       });
@@ -908,38 +909,58 @@ class BrushManager {
     });
     this.activeEffects.clear();
     
-    // Supprimer tous les éléments temporaires du layer
-    const allChildren = this.layer.getChildren().toArray();
-    allChildren.forEach(child => {
+    // ✅ CORRECTION : Konva getChildren() retourne directement un array-like
+    const allChildren = this.layer.getChildren();
+    const childrenToRemove = [];
+    
+    // Collecter les enfants à supprimer
+    for (let i = 0; i < allChildren.length; i++) {
+      const child = allChildren[i];
       if (child.isTemporaryEffect) {
+        childrenToRemove.push(child);
+      }
+    }
+    
+    // Supprimer les enfants collectés
+    childrenToRemove.forEach(child => {
+      if (child && !child.isDestroyed) {
         child.destroy();
       }
     });
     
     this.layer.batchDraw();
-    console.log('🧹 BrushManager: All temporary effects cleared, permanent traces kept');
+    console.log(`🧹 BrushManager: All temporary effects cleared, permanent traces kept (${childrenToRemove.length} effects removed)`);
   }
 
   // Suppression complète incluant les tracés (pour clear canvas)
   clearEverything() {
     console.log('🧹 BrushManager: clearEverything() called');
     
-    // Clear les effets temporaires
+    // Clear les effets temporaires d'abord
     this.clearAllEffects();
     
-    // Supprimer aussi les tracés permanents du layer
-    const allChildren = this.layer.getChildren().toArray();
-    const permanentTraces = allChildren.filter(child => child.isPermanentTrace);
-    const temporaryEffects = allChildren.filter(child => child.isTemporaryEffect);
+    // ✅ CORRECTION : Konva getChildren() retourne directement un array-like
+    const allChildren = this.layer.getChildren();
+    const permanentTraces = [];
+    const temporaryEffects = [];
+    
+    // Collecter les enfants par type
+    for (let i = 0; i < allChildren.length; i++) {
+      const child = allChildren[i];
+      if (child.isPermanentTrace) {
+        permanentTraces.push(child);
+      } else if (child.isTemporaryEffect) {
+        temporaryEffects.push(child);
+      }
+    }
     
     console.log(`🧹 BrushManager: Found ${permanentTraces.length} permanent traces and ${temporaryEffects.length} temporary effects to clear`);
     
-    permanentTraces.forEach(child => {
-      child.destroy();
-    });
-    
-    temporaryEffects.forEach(child => {
-      child.destroy();
+    // Supprimer tous les éléments collectés
+    [...permanentTraces, ...temporaryEffects].forEach(child => {
+      if (child && !child.isDestroyed) {
+        child.destroy();
+      }
     });
     
     this.layer.batchDraw();

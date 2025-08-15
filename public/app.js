@@ -1,24 +1,4 @@
-// MODIFIÉ : Clear canvas avec logs debug ULTRA détaillés
-socket.on('clearCanvas', () => {
-  const childrenBefore = layer.getChildren().length;
-  const permanentTraces = layer.getChildren().filter(child => child.isPermanentTrace).length;
-  const normalShapes = childrenBefore - permanentTraces;
-  
-  console.log(`🧼 INDEX RECEIVED clearCanvas event:`);
-  console.log(`   - Total elements before: ${childrenBefore}`);
-  console.log(`   - Permanent traces: ${permanentTraces}`);
-  console.log(`   - Normal shapes: ${normalShapes}`);
-  console.log(`   - Socket ID: ${socket.id}`);
-  
-  layer.destroyChildren(); // ✅ Supprime TOUT (y compris tracés permanents)
-  brushManager.clearEverything(); // ✅ Clear complet du BrushManager
-  layer.draw();
-  
-  const childrenAfter = layer.getChildren().length;
-  console.log(`🧼 INDEX clearCanvas COMPLETE:`);
-  console.log(`   - Elements after: ${childrenAfter}`);
-  console.log(`   - Successfully cleared: ${childrenBefore - childrenAfter} elements`);
-});// public/app.js - Version avec support des tracés permanents
+// public/app.js - Version avec support des tracés permanents
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -38,9 +18,6 @@ let isDrawing    = false;
 let lastLine;
 let currentId;
 let lastPanPos = null;
-
-// Fonction globale pour changer la couleur - SUPPRIMÉE pour /index
-// Interface /index utilise couleur fixe rouge (#FF5252)
 
 // === UTILITAIRES ===
 function throttle(func, wait) {
@@ -136,9 +113,6 @@ function showUndoNotification() {
     }
   }, 800);
 }
-
-// Color selection - SUPPRIMÉ pour /index (couleur fixe)
-// Interface /index utilise une couleur fixe rouge pour simplicité
 
 // Size slider
 document.getElementById('size-slider').addEventListener('input', e => {
@@ -432,14 +406,26 @@ socket.on('deleteShape', ({ id }) => {
   }
 });
 
-// MODIFIÉ : Clear canvas avec tracés permanents
+// Clear canvas avec logs debug
 socket.on('clearCanvas', () => {
-  const childrenCount = layer.getChildren().length;
+  const childrenBefore = layer.getChildren().length;
+  const permanentTraces = layer.getChildren().filter(child => child.isPermanentTrace).length;
+  const normalShapes = childrenBefore - permanentTraces;
+  
+  console.log(`🧼 INDEX RECEIVED clearCanvas event:`);
+  console.log(`   - Total elements before: ${childrenBefore}`);
+  console.log(`   - Permanent traces: ${permanentTraces}`);
+  console.log(`   - Normal shapes: ${normalShapes}`);
+  console.log(`   - Socket ID: ${socket.id}`);
+  
   layer.destroyChildren(); // ✅ Supprime TOUT (y compris tracés permanents)
   brushManager.clearEverything(); // ✅ Clear complet du BrushManager
   layer.draw();
   
-  console.log(`🧼 Canvas cleared: ${childrenCount} elements removed (including permanent traces)`);
+  const childrenAfter = layer.getChildren().length;
+  console.log(`🧼 INDEX clearCanvas COMPLETE:`);
+  console.log(`   - Elements after: ${childrenAfter}`);
+  console.log(`   - Successfully cleared: ${childrenBefore - childrenAfter} elements`);
 });
 
 socket.on('restoreShapes', (shapes) => {
