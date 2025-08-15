@@ -1,4 +1,4 @@
-// public/app.js - Version avec support des tracés permanents
+// public/app.js - Version complète corrigée avec pan fonctionnel
 const socket = io();
 const stage = new Konva.Stage({
   container: 'canvas-container',
@@ -48,11 +48,11 @@ function getPressureSize(pressure) {
   return minSize + (maxSize - minSize) * pressure;
 }
 
-// Coordonnées simplifiées pour index (pas de zoom)
+// 🔧 CORRIGÉ : Coordonnées avec compensation du pan
 function getScenePos(pointer) {
   return {
-    x: pointer.x,
-    y: pointer.y
+    x: (pointer.x - stage.x()) / stage.scaleX(),
+    y: (pointer.y - stage.y()) / stage.scaleY()
   };
 }
 
@@ -511,4 +511,4 @@ socket.on('adminResetBrushEffects', () => {
 // Initialisation du curseur
 updateCursor();
 
-console.log('✅ App.js with permanent traces loaded');
+console.log('✅ App.js complet with pan coordinates fix loaded');
