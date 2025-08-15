@@ -12,7 +12,7 @@ stage.add(layer);
 const brushManager = new BrushManager(layer, socket);
 
 let currentTool  = 'brush';
-let currentColor = '#FF5252'; // Couleur rouge fixe par défaut pour /index
+let currentColor = '#FFFFFF'; // Couleur blanche fixe par défaut pour /index
 let currentSize  = parseInt(document.getElementById('size-slider').value, 10);
 let isDrawing    = false;
 let lastLine;
