@@ -26,7 +26,7 @@
 - **Export PNG** haute qualité
 - **Tous les brush animés** avec tracés permanents
 
-### 👑 **Interface Admin** (`/chantilly`)
+### 👑 **Interface Admin** (`/admin`)
 - **Contrôle global** du canvas
 - **Clear complet** pour tous les utilisateurs
 - **Reset des effets** sélectif
@@ -98,7 +98,7 @@ NODE_ENV=production
 |-------|-----------|-------------|
 | `/` | **Public** | Interface simplifiée pour tous |
 | `/atelier` | **Artiste** | Outils avancés et formes |
-| `/chantilly` | **Admin** | Contrôle et modération |
+| `/admin` | **Admin** | Contrôle et modération |
 | `/health` | **API** | Health check du serveur |
 
 ## 🎮 Utilisation
@@ -221,26 +221,18 @@ NODE_ENV=production
 - **Documentation** des fonctions complexes
 - **Tests** des nouvelles fonctionnalités
 
-## 📝 Roadmap
-
-### v2.0 (À venir)
-- [ ] **Système d'utilisateurs** avec pseudos
-- [ ] **Salles privées** et publiques
-- [ ] **Chat intégré** pour collaboration
-- [ ] **Historique** étendu avec timeline
-- [ ] **Export SVG** vectoriel
-- [ ] **Brush personnalisés** par utilisateur
-
-### v1.5 (Prochaine)
-- [ ] **Layers/Calques** système
-- [ ] **Zoom synchronisé** entre utilisateurs
-- [ ] **Curseurs** des autres utilisateurs visibles
-- [ ] **Performance** monitoring dashboard
-- [ ] **Backup** automatique périodique
 
 ## 📄 Licence
 
-Ce projet est sous licence **MIT** - voir le fichier [LICENSE](LICENSE) pour plus de détails.
+- **Code released** under the PolyForm Noncommercial 1.0.0 license.
+- **Unauthorized commercial use** by third parties is not permitted.
+- **For installation services, contact:** elisa@neon-live.fr
+
+## Licensing
+The source code is provided under the **PolyForm Noncommercial 1.0.0** license.
+**No commercial use by third parties** is permitted.
+Prospective partners who need exceptions: please get in touch.
+
 
 ## 🙏 Remerciements
 
@@ -249,18 +241,20 @@ Ce projet est sous licence **MIT** - voir le fichier [LICENSE](LICENSE) pour plu
 - **Express.js** pour le serveur web robuste
 - **Communauté open-source** pour l'inspiration et les outils
 
+## Terms of Use (excerpt)
+- No copying, reverse engineering, or hosting a competing service.
+- All rights to the Picturævox™ name and logo are reserved.
+
+
 ## 📞 Support
 
-- **Issues GitHub** : [Créer un ticket](https://github.com/votre-username/picturae-vox/issues)
+- **Je ne suis pas développeur.euse donc je n'y connais rien, cette application est développée avec Claude IA :)** 
 - **Documentation** : Voir ce README
-- **Démo live** : [https://votre-app.railway.app](https://votre-app.railway.app)
 
 ---
 
 <div align="center">
 
 **🎨 Fait avec ❤️ pour la collaboration créative**
-
-[⭐ Donnez une étoile](https://github.com/votre-username/picturae-vox) • [🐛 Signaler un bug](https://github.com/votre-username/picturae-vox/issues) • [💡 Demander une fonctionnalité](https://github.com/votre-username/picturae-vox/issues)
 
 </div>
